@@ -65,7 +65,7 @@
           </div>
 
           <div id="desktopHint" class="desktop-hint">
-            <span>拖动旋转</span><i></i><span>滚轮缩放</span><i></i><span>点击门扇开关</span>
+            <span>拖动旋转</span><i></i><span>滚轮缩放鼠标所指位置</span><i></i><span>点击门扇或抽屉开关</span>
           </div>
 
           <div id="walkControls" class="walk-controls" aria-label="第一人称移动控制">
@@ -75,7 +75,12 @@
               <button type="button" data-move="backward" aria-label="向后">▼</button>
               <button type="button" data-move="right" aria-label="向右">▶</button>
             </div>
-            <div class="look-note">拖动画面转向</div>
+            <div class="walk-settings">
+              <label class="speed-label" for="walkSpeed"><span>移动速度</span><output id="walkSpeedValue" for="walkSpeed">0.65 米/秒</output></label>
+              <input id="walkSpeed" type="range" min="0.25" max="2" step="0.05" value="0.65" aria-label="移动速度" />
+              <div class="speed-range"><span>慢 · 0.25</span><span>快 · 2.00</span></div>
+              <div class="look-note">拖动画面转向</div>
+            </div>
           </div>
 
           <button id="interactDoor" class="door-action" type="button" hidden>开门</button>
@@ -109,6 +114,7 @@
             <div id="roomList" class="room-list" role="group" aria-label="房间快捷视角">
               <button class="room-button is-active" type="button" data-room="all"><span>全屋</span><small>ALL</small></button>
               <button class="room-button" type="button" data-room="living"><span>客餐厅</span><small>33.8㎡</small></button>
+              <button class="room-button" type="button" data-room="tv"><span>电视与收纳</span><small>可开抽屉</small></button>
               <button class="room-button" type="button" data-room="gaming"><span>电竞房</span><small>卧室A</small></button>
               <button class="room-button" type="button" data-room="guest"><span>客房</span><small>卧室B</small></button>
               <button class="room-button" type="button" data-room="master"><span>主卧</span><small>卧室C</small></button>
@@ -127,6 +133,7 @@
             <div class="door-bulk-actions"><button id="openAllDoors" type="button">全部打开</button><button id="closeAllDoors" type="button">全部关闭</button></div>
             <div id="doorList" class="door-list" aria-label="各房间门的开关"></div>
           </div>
+          <div class="panel-section drawers-section"><div class="section-title"><span>电视柜抽屉</span><small>也可点击柜子</small></div><div id="drawerList" class="drawer-list" aria-label="电视柜抽屉开关"></div></div>
           <div class="panel-section display-section">
             <div class="section-title"><span>显示选项</span></div>
             <div class="display-options">
@@ -182,8 +189,8 @@
           <span class="dialog-kicker">操作指南</span>
           <h2 id="helpTitle">自在地逛逛吉吉的家</h2>
           <div class="help-grid">
-            <div><b>01</b><strong>鸟瞰模式</strong><p>拖动画面旋转，滚轮或双指缩放；点击房间按钮快速定位；点击3D门扇可开关门。</p></div>
-            <div><b>02</b><strong>第一人称</strong><p>电脑使用WASD或方向键移动，手机使用左下方向键；拖动画面转向。靠近门后点击开门按钮，电脑也可按E。</p></div>
+            <div><b>01</b><strong>鸟瞰模式</strong><p>拖动画面旋转，滚轮缩放鼠标所指位置，双指可缩放；点击房间按钮快速定位；点击门扇或电视柜抽屉可开关。</p></div>
+            <div><b>02</b><strong>第一人称</strong><p>电脑使用WASD或方向键移动，手机使用左下方向键；移动速度可用滑杆调整并自动记住。拖动画面转向。靠近门后点击开门按钮，电脑也可按E。</p></div>
             <div><b>03</b><strong>方案切换</strong><p>比较阳台并入主卧与独立多功能房两种布置；独立方案的推拉门可开关。</p></div>
           </div>
           <button id="startTour" class="primary-button" type="button">开始看房</button>
@@ -195,6 +202,7 @@
     <script type="module">
 import * as THREE from "https://esm.sh/three@0.180.0";
 import { OrbitControls } from "https://esm.sh/three@0.180.0/examples/jsm/controls/OrbitControls.js";
+import { RoundedBoxGeometry } from "https://esm.sh/three@0.180.0/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { GLTFLoader } from "https://esm.sh/three@0.180.0/examples/jsm/loaders/GLTFLoader.js";
 
 const $ = (selector, scope = document) => scope.querySelector(selector);
@@ -227,6 +235,7 @@ const state = {
   walkYaw: Math.PI,
   walkPitch: 0,
   walkLookActive: false,
+  walkSpeed: readWalkSpeed(),
   moved: false,
   pointerStart: { x: 0, y: 0 },
   lastPointer: { x: 0, y: 0 },
@@ -255,7 +264,9 @@ const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.07;
 controls.screenSpacePanning = true;
-controls.minDistance = 4.5;
+controls.zoomToCursor = true;
+controls.zoomSpeed = 0.85;
+controls.minDistance = 1.6;
 controls.maxDistance = 65;
 controls.minPolarAngle = 0.18;
 controls.maxPolarAngle = Math.PI / 2.08;
@@ -412,6 +423,7 @@ scene.add(home);
 const floorAreas = [];
 const wallSegments = [];
 const doors = [];
+const drawers = [];
 const doorsGroup = new THREE.Group();
 const floorsGroup = new THREE.Group();
 const wallsGroup = new THREE.Group();
@@ -427,7 +439,12 @@ glassScheme.add(glassFurniture, glassStructure);
 home.add(floorsGroup, wallsGroup, doorsGroup, furnitureGroup, labelsGroup, mergedScheme, glassScheme);
 
 function box(parent, x, y, z, width, height, depth, material, options = {}) {
-  const geometry = new THREE.BoxGeometry(width, height, depth);
+  // 墙与地面保留准确边界；家具和饰面使用小圆角，避免生硬积木边缘。
+  const shortest = Math.min(width, height, depth);
+  const structural = parent === wallsGroup || parent === floorsGroup || parent === glassStructure;
+  const fabric = material === materials.fabric || material === materials.fabricDark;
+  const radius = options.radius ?? (structural || material.transparent || shortest < 0.02 ? 0 : Math.min(shortest / 4, fabric ? 0.035 : 0.006));
+  const geometry = radius > 0 ? new RoundedBoxGeometry(width, height, depth, fabric ? 3 : 2, radius) : new THREE.BoxGeometry(width, height, depth);
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(x, y, z);
   mesh.castShadow = options.castShadow ?? true;
@@ -474,7 +491,7 @@ function addWallWindow(x, z, width, height, sill, rotation = 0, { panoramic = fa
   const centerY = sill + height / 2;
   const left = -width / 2;
   const right = width / 2;
-  const frameWidth = panoramic ? 0.045 : 0.055;
+  const frameWidth = 0.055;
   const glassMaterial = frosted ? materials.frostedGlass : materials.windowGlass;
   if (rotation === 0) {
     if (sill > 0) wallH(x + left, x + right, z, sill, materials.wall, sill / 2);
@@ -485,11 +502,20 @@ function addWallWindow(x, z, width, height, sill, rotation = 0, { panoramic = fa
     if (top < CEILING_HEIGHT) wallV(x, z + left, z + right, CEILING_HEIGHT - top, materials.wall, (top + CEILING_HEIGHT) / 2);
     wallSegments.push({ x1: x, z1: z + left, x2: x, z2: z + right });
   }
-  // 窗框包住墙洞边缘；窗玻璃只在洞口内，不形成整片外墙。
+  // 客厅是一块连续的无框玻璃，边缘直接进入墙体，无中间立柱或黑色边框。
+  if (panoramic) {
+    box(group, 0, centerY, 0, width + 0.002, height + 0.002, 0.018, materials.windowGlass,
+      { castShadow: false, name: "living-frameless-glass", radius: 0 });
+    group.position.set(x, 0, z);
+    group.rotation.y = rotation;
+    group.userData.windowType = "panoramic";
+    wallsGroup.add(group);
+    return group;
+  }
   box(group, 0, centerY, 0, width - frameWidth, height - frameWidth, 0.02, glassMaterial, { castShadow: false });
   [left, right].forEach(px => box(group, px, centerY, 0, frameWidth, height + frameWidth, 0.11, materials.black));
   [sill, top].forEach(y => box(group, 0, y, 0, width + frameWidth, frameWidth, 0.11, materials.black));
-  const divisions = panoramic ? 4 : 2;
+  const divisions = 2;
   for (let i = 1; i < divisions; i++) box(group, left + width * i / divisions, centerY, 0, 0.035, height, 0.085, materials.black);
   if (!panoramic) {
     box(group, 0, sill - 0.02, 0, width + 0.08, 0.04, WALL_THICKNESS + 0.06, materials.offWhite);
@@ -668,6 +694,82 @@ wallH(11.4, 13.8, 11.9); wallV(8.1, 11.9, 13.7); wallV(13.8, 11.9, 13.7);
 wallH(8.1, 8.6, 13.7); wallH(10.0, 10.25, 13.7); wallH(11.65, 11.9, 13.7); wallH(13.3, 13.8, 13.7);
 [9.3, 10.95, 12.6].forEach(x => addWindowHorizontal(x, 13.7, 1.4, 1.4, 0.9));
 
+
+// 合并同种材料的轴向方块，只保留整体外表面，消除重叠面和墙角拼块接缝。
+// 坐标压缩保留所有窗洞与门洞；每个平面再合并成连续矩形。
+function unifyBoxSurfaces(parent, meshes, material, name, uvScale = 8) {
+  if (!meshes.length) return null;
+  const bounds = meshes.map(mesh => {
+    const p = mesh.geometry.parameters;
+    return [[mesh.position.x - p.width / 2, mesh.position.y - p.height / 2, mesh.position.z - p.depth / 2],
+      [mesh.position.x + p.width / 2, mesh.position.y + p.height / 2, mesh.position.z + p.depth / 2]];
+  });
+  const axes = [0, 1, 2].map(axis => [...new Set(bounds.flatMap(b => [b[0][axis], b[1][axis]]).map(n => Number(n.toFixed(6))))].sort((a,b) => a-b));
+  const count = axes.map(a => a.length - 1);
+  const maps = axes.map(a => new Map(a.map((n,i) => [n,i])));
+  const cells = new Uint8Array(count[0] * count[1] * count[2]);
+  const index = (x,y,z) => (x * count[1] + y) * count[2] + z;
+  bounds.forEach(b => {
+    const lo = b[0].map((n,a) => maps[a].get(Number(n.toFixed(6))));
+    const hi = b[1].map((n,a) => maps[a].get(Number(n.toFixed(6))));
+    for (let x=lo[0]; x<hi[0]; x++) for (let y=lo[1]; y<hi[1]; y++) for (let z=lo[2]; z<hi[2]; z++) cells[index(x,y,z)] = 1;
+  });
+  const occupied = p => p.every((n,a) => n >= 0 && n < count[a]) && cells[index(...p)] === 1;
+  const positions=[], normals=[], uvs=[];
+  for (let axis=0; axis<3; axis++) {
+    const u=(axis+1)%3, v=(axis+2)%3;
+    for (let plane=0; plane<=count[axis]; plane++) for (const sign of [-1,1]) {
+      const mask=new Uint8Array(count[u]*count[v]);
+      for (let i=0; i<count[u]; i++) for (let j=0; j<count[v]; j++) {
+        const inside=[0,0,0], outside=[0,0,0];
+        inside[axis]=plane+(sign===1 ? -1 : 0); outside[axis]=plane+(sign===1 ? 0 : -1);
+        inside[u]=outside[u]=i; inside[v]=outside[v]=j;
+        if (occupied(inside) && !occupied(outside)) mask[i*count[v]+j]=1;
+      }
+      for (let i=0; i<count[u]; i++) for (let j=0; j<count[v]; j++) {
+        if (!mask[i*count[v]+j]) continue;
+        let endJ=j+1; while(endJ<count[v] && mask[i*count[v]+endJ]) endJ++;
+        let endI=i+1;
+        while(endI<count[u]) {
+          let complete=true;
+          for(let k=j;k<endJ;k++) if(!mask[endI*count[v]+k]) { complete=false; break; }
+          if(!complete) break;
+          endI++;
+        }
+        for(let a=i;a<endI;a++) for(let b=j;b<endJ;b++) mask[a*count[v]+b]=0;
+        const corners=[[i,j],[endI,j],[endI,endJ],[i,endJ]].map(([a,b]) => {
+          const p=[0,0,0]; p[axis]=axes[axis][plane]; p[u]=axes[u][a]; p[v]=axes[v][b]; return p;
+        });
+        for(const corner of sign===1 ? [0,1,2,0,2,3] : [0,2,1,0,3,2]) {
+          const p=corners[corner], normal=[0,0,0]; normal[axis]=sign;
+          positions.push(...p); normals.push(...normal);
+          uvs.push(p[axis===0 ? 2 : 0]/uvScale, p[axis===1 ? 2 : 1]/uvScale);
+        }
+      }
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position",new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute("normal",new THREE.Float32BufferAttribute(normals,3));
+  geometry.setAttribute("uv",new THREE.Float32BufferAttribute(uvs,2));
+  geometry.computeBoundingBox(); geometry.computeBoundingSphere();
+  const result=new THREE.Mesh(geometry,material); result.name=name;
+  result.castShadow=true; result.receiveShadow=true;
+  meshes.forEach(mesh => { parent.remove(mesh); mesh.geometry.dispose(); });
+  parent.add(result);
+  return result;
+}
+
+function finishStructure() {
+  unifyBoxSurfaces(wallsGroup, wallsGroup.children.filter(m => m.isMesh && m.material === materials.wall), materials.wall, "continuous-walls");
+  [materials.floorStone, materials.floorWood, materials.floorBath].forEach((material,i) => {
+    const mesh = unifyBoxSurfaces(floorsGroup, floorsGroup.children.filter(m => m.isMesh && m.material === material), material, "continuous-floor-"+i);
+    mesh.userData.isFloor = true;
+  });
+}
+
+finishStructure();
+
 function addRug(parent, x, z, width, depth, color = 0xb9a98f) {
   const mat = new THREE.MeshStandardMaterial({ color, roughness: 1 });
   return box(parent, x, 0.018, z, width, 0.035, depth, mat, { receiveShadow: true, castShadow: false });
@@ -698,6 +800,7 @@ function addChair(parent, x, z, rotation = 0, material = materials.fabricDark) {
 
 function addBed(parent, x, z, width = 1.8, depth = 2.0, rotation = 0) {
   const group = new THREE.Group();
+  [[-width/2+0.16,-depth/2+0.16],[width/2-0.16,-depth/2+0.16],[-width/2+0.16,depth/2-0.16],[width/2-0.16,depth/2-0.16]].forEach(([px,pz]) => box(group,px,0.037,pz,0.07,0.074,0.07,materials.oak));
   box(group, 0, 0.24, 0, width, 0.36, depth, materials.oak);
   box(group, 0, 0.48, -0.02, width - 0.12, 0.3, depth - 0.16, materials.offWhite);
   box(group, 0, 0.78, -depth / 2 + 0.06, width, 1.15, 0.13, materials.fabric);
@@ -733,15 +836,98 @@ function addCabinet(parent, x, z, width, depth, height, material = materials.oak
   return group;
 }
 
+
+function makeTVScreenTexture() {
+  const c=document.createElement("canvas"); c.width=1024; c.height=576;
+  const ctx=c.getContext("2d");
+  const sky=ctx.createLinearGradient(0,0,0,576); sky.addColorStop(0,"#173449"); sky.addColorStop(0.6,"#bb8061"); sky.addColorStop(1,"#e1b67d");
+  ctx.fillStyle=sky; ctx.fillRect(0,0,1024,576);
+  ctx.fillStyle="#f8dca2"; ctx.beginPath(); ctx.arc(738,210,58,0,Math.PI*2); ctx.fill();
+  [["#536875",330],["#354c58",420],["#173540",515]].forEach(([color,y],layer) => {
+    ctx.fillStyle=color; ctx.beginPath(); ctx.moveTo(0,576); ctx.lineTo(0,y);
+    for(let x=0;x<=1024;x+=128) ctx.lineTo(x,y-Math.sin(x*0.009+layer)*65-35);
+    ctx.lineTo(1024,576); ctx.closePath(); ctx.fill();
+  });
+  ctx.fillStyle="rgba(250,248,240,.93)"; ctx.font="400 32px Microsoft YaHei, sans-serif"; ctx.fillText("吉吉的家",48,67);
+  ctx.font="22px sans-serif"; ctx.fillText("19:30",900,66);
+  const texture=new THREE.CanvasTexture(c); texture.colorSpace=THREE.SRGBColorSpace;
+  texture.anisotropy=renderer.capabilities.getMaxAnisotropy(); return texture;
+}
+
+function addTVConsole(parent, x, z) {
+  const group=new THREE.Group(); group.name="电视与收纳柜";
+  group.position.set(x,0,z); group.rotation.y=-Math.PI/2; parent.add(group);
+  // 柜体有完整内腔、底板、侧板和顶板，抽屉拉出后能看见收纳空间。
+  box(group,0,0.16,0,2.2,0.055,0.43,materials.oak);
+  box(group,0,0.69,0,2.22,0.055,0.45,materials.oakLight);
+  box(group,0,0.42,-0.201,2.2,0.52,0.028,materials.oak);
+  [-1.08,1.08].forEach(px => box(group,px,0.42,0,0.04,0.52,0.43,materials.oakLight));
+  [-0.37,0.37].forEach(px => box(group,px,0.42,0,0.026,0.52,0.4,materials.oak));
+  box(group,0,0.54,0,2.16,0.024,0.41,materials.oak);
+  [-0.9,0.9].forEach(px => [-0.14,0.14].forEach(pz => box(group,px,0.075,pz,0.045,0.15,0.045,materials.black)));
+  for(let i=0;i<3;i++) {
+    const drawer=new THREE.Group(); drawer.position.set((i-1)*0.733,0,0); group.add(drawer);
+    const id="tv-drawer-"+i;
+    box(drawer,0,0.215,0,0.684,0.022,0.36,materials.oakLight);
+    [-0.326,0.326].forEach(px => box(drawer,px,0.35,0,0.025,0.27,0.36,materials.oakLight));
+    box(drawer,0,0.35,-0.17,0.684,0.27,0.022,materials.oakLight);
+    box(drawer,0,0.365,0.222,0.719,0.327,0.032,materials.oakLight);
+    box(drawer,0,0.46,0.247,0.24,0.018,0.021,materials.black);
+    // 小物件体现可用的收纳深度，不封住柜体。
+    if(i===0) {
+      box(drawer,-0.12,0.25,0.015,0.18,0.047,0.23,materials.offWhite);
+      box(drawer,0.14,0.245,0.01,0.055,0.035,0.15,materials.black);
+    }
+    drawer.traverse(object => { object.userData.drawerId=id; });
+    drawers.push({id,label:["左侧收纳抽屉","中间收纳抽屉","右侧收纳抽屉"][i],group:drawer,open:false,progress:0});
+  }
+  box(group,-0.75,0.592,0.02,0.32,0.08,0.2,materials.offWhite);
+  box(group,-0.75,0.635,0.02,0.32,0.018,0.2,materials.green);
+  box(group,0.68,0.584,0.02,0.15,0.065,0.22,materials.black);
+  // 75寸16:9屏幕朝向沙发，画面与黑色机身分开。
+  box(group,0,1.46,-0.10,1.72,1.0,0.062,materials.black,{name:"tv-body",radius:0.009});
+  const display=new THREE.Mesh(new THREE.PlaneGeometry(1.665,0.937),
+    new THREE.MeshBasicMaterial({map:makeTVScreenTexture(),toneMapped:false}));
+  display.position.set(0,1.465,-0.066); display.name="tv-display"; group.add(display);
+  box(group,0,1.0,-0.065,0.055,0.007,0.006,new THREE.MeshBasicMaterial({color:0x91d7a0}),{radius:0,castShadow:false});
+  box(group,0,1.38,-0.17,0.4,0.25,0.07,materials.black);
+  return group;
+}
+
+function toggleDrawer(id,force) {
+  const drawer=drawers.find(item => item.id===id); if(!drawer) return;
+  drawer.open=typeof force==="boolean" ? force : !drawer.open;
+  updateDrawerButtons();
+  showToast(drawer.label+(drawer.open ? "已拉开" : "已收起"));
+}
+function updateDrawerButtons() {
+  $$(".drawer-button").forEach(button => {
+    const drawer=drawers.find(item => item.id===button.dataset.drawer);
+    button.setAttribute("aria-pressed",String(drawer.open));
+    button.querySelector("small").textContent=drawer.open ? "已拉开 · 点击收起" : "已收起 · 点击拉开";
+  });
+}
+function updateDrawers(delta) {
+  drawers.forEach(drawer => {
+    const target=drawer.open ? 1 : 0;
+    drawer.progress+=Math.sign(target-drawer.progress)*Math.min(Math.abs(target-drawer.progress),delta*2.7);
+    drawer.group.position.z=drawer.progress*0.28;
+  });
+}
+function bindDrawerButtons(scope) {
+  $$(".drawer-button",scope).forEach(button => button.addEventListener("click",()=>toggleDrawer(button.dataset.drawer)));
+}
+
 // 家具位置与重建后的房间保持同一坐标，不占用过道及门扇回转区。
 addRug(furnitureGroup, 3.65, 6.7, 2.65, 2.9, 0xb9aa93);
 box(furnitureGroup, 2.2, 0.43, 6.65, 0.78, 0.76, 2.75, materials.fabric);
-box(furnitureGroup, 3.1, 0.43, 7.65, 1.4, 0.76, 0.78, materials.fabric);
+box(furnitureGroup, 3.18, 0.43, 7.65, 1.2, 0.76, 0.78, materials.fabric);
 box(furnitureGroup, 1.93, 0.74, 6.65, 0.16, 0.64, 2.72, materials.fabricDark);
 box(furnitureGroup, 3.1, 0.74, 7.93, 1.4, 0.64, 0.16, materials.fabricDark);
 box(furnitureGroup, 3.6, 0.27, 6.55, 1.2, 0.35, 0.65, materials.oakLight);
-box(furnitureGroup, 5.88, 0.39, 7.4, 0.32, 0.72, 2.1, materials.oakLight);
-box(furnitureGroup, 5.91, 1.32, 7.4, 0.055, 1, 1.7, materials.screen);
+[[3.16,6.33],[4.04,6.33],[3.16,6.77],[4.04,6.77]].forEach(([x,z]) => box(furnitureGroup,x,0.06,z,0.075,0.12,0.075,materials.oak));
+[[2.02,5.5],[2.38,5.5],[2.02,7.77],[2.38,7.77],[3.58,7.46],[3.58,7.84]].forEach(([x,z]) => box(furnitureGroup,x,0.034,z,0.07,0.068,0.07,materials.oak));
+addTVConsole(furnitureGroup, 5.82, 7.32);
 box(furnitureGroup, 3.45, 0.75, 2.9, 1.55, 0.09, 0.88, materials.oakLight);
 box(furnitureGroup, 3.45, 0.37, 2.9, 0.12, 0.75, 0.58, materials.black);
 [[2.9,2.26,Math.PI],[3.9,2.26,Math.PI],[2.9,3.54,0],[3.9,3.54,0]].forEach(([x,z,r])=>addChair(furnitureGroup,x,z,r,materials.fabric));
@@ -752,7 +938,12 @@ box(furnitureGroup, 0.3, 0.46, 0.8, 0.52, 0.9, 1.34, materials.oakLight);
 box(furnitureGroup, 1.38, 0.46, 0.27, 1.65, 0.9, 0.52, materials.oakLight);
 box(furnitureGroup, 0.32, 1.64, 0.8, 0.43, 0.68, 1.25, materials.offWhite);
 box(furnitureGroup, 1.42, 1.64, 0.29, 1.55, 0.68, 0.4, materials.offWhite);
-box(furnitureGroup, 1.27, 0.94, 0.27, 0.7, 0.06, 0.45, materials.black);
+const kitchenCounter = [
+  box(furnitureGroup,0.3,0.9225,0.8,0.58,0.035,1.4,materials.offWhite,{radius:0}),
+  box(furnitureGroup,1.38,0.9225,0.27,1.72,0.035,0.58,materials.offWhite,{radius:0}),
+];
+unifyBoxSurfaces(furnitureGroup,kitchenCounter,materials.offWhite,"continuous-kitchen-counter");
+box(furnitureGroup, 1.27, 0.956, 0.27, 0.7, 0.032, 0.45, materials.black);
 box(furnitureGroup, 3.1, 0.5, 0.45, 0.58, 0.98, 0.64, materials.offWhite);
 const washerDoor = cylinder(furnitureGroup, 3.1, 0.5, 0.11, 0.2, 0.035, materials.black, 32);
 washerDoor.rotation.x = Math.PI / 2;
@@ -775,6 +966,7 @@ addChair(furnitureGroup, 10.5, 3.5, 0, materials.fabric);
 addBed(furnitureGroup, 10.12, 10.12, 1.8, 2.05, Math.PI / 2);
 box(furnitureGroup, 10.7, 0.34, 9.0, 0.46, 0.62, 0.48, materials.walnut);
 box(furnitureGroup, 10.7, 0.34, 11.2, 0.46, 0.62, 0.48, materials.walnut);
+[9.0,11.2].forEach(z => box(furnitureGroup,10.7,0.022,z,0.38,0.044,0.4,materials.walnut));
 addCabinet(furnitureGroup, 11.1, 7.45, 0.38, 1.2, 2.2);
 
 function addBathroom(parent, x, z, width, depth) {
@@ -872,6 +1064,7 @@ scene.add(grid);
 const roomViews = {
   all: { label: '全屋鸟瞰', target: [6.5, 0.4, 6.7], offset: [12, 16, 17], walk: [4.65, 1.62, 5.2], yaw: -Math.PI / 2 },
   living: { label: '客餐厅', target: [3.7, 0.65, 5.9], offset: [6.6, 7.4, 7.3], walk: [4.65, 1.62, 5.2], yaw: -Math.PI / 2 },
+  tv: { label: '电视与收纳柜', target: [5.75, 1.25, 7.32], offset: [-2.8, 1.1, 1.0], walk: [4.5, 1.62, 7.32], yaw: -Math.PI / 2 },
   hall: { label: '过道', target: [7.5, 0.4, 5.25], offset: [4.8, 6.5, 6.1], walk: [6.9, 1.62, 5.25], yaw: -Math.PI / 2 },
   gaming: { label: '双人电竞房', target: [6.9, 0.7, 2.6], offset: [4.7, 6, 5.5], walk: [7.25, 1.62, 3.6], yaw: 0 },
   guest: { label: '客房 / 未来儿童房', target: [9.9, 0.7, 2.6], offset: [4.8, 6.1, 5.8], walk: [9.15, 1.62, 3.8], yaw: 0 },
@@ -951,6 +1144,7 @@ function setMode(mode) {
   pressed.clear();
   state.mode = mode;
   stage.classList.remove("is-plan");
+  stage.classList.toggle("is-walk", mode === "walk");
   controls.enabled = mode === "orbit";
   walkControls.classList.toggle("is-visible", mode === "walk");
   desktopHint.style.display = mode === "walk" ? "none" : "";
@@ -1055,14 +1249,14 @@ canvas.addEventListener("pointermove", (event) => {
   state.lastPointer.y = event.clientY;
 });
 
-function doorFromHits(hits) {
+function interactionFromHits(hits) {
   for (const hit of hits) {
     let object = hit.object;
     let visible = true;
     while (object) { if (!object.visible) visible = false; object = object.parent; }
     if (!visible) continue;
     // 只操作视线中第一个物体，不透过墙壁点击房间另一面的门。
-    return hit.object.userData.doorId || null;
+    return { doorId: hit.object.userData.doorId, drawerId: hit.object.userData.drawerId };
   }
   return null;
 }
@@ -1078,11 +1272,13 @@ canvas.addEventListener('pointerup', (event) => {
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObjects([doorsGroup, wallsGroup, furnitureGroup, floorsGroup], true);
-  const doorId = doorFromHits(hits);
-  if (doorId) { toggleDoor(doorId); return; }
+  const interaction = interactionFromHits(hits);
+  if (interaction?.doorId) { toggleDoor(interaction.doorId); return; }
+  if (interaction?.drawerId) { toggleDrawer(interaction.drawerId); return; }
   if (state.mode !== 'orbit') return;
   const floorHit = hits.find(hit => hit.object.userData.isFloor);
-  const room = floorHit?.object.userData.room;
+  const localPoint = floorHit ? home.worldToLocal(floorHit.point.clone()) : null;
+  const room = localPoint ? floorAreas.find(area => localPoint.x >= area.x1 && localPoint.x <= area.x2 && localPoint.z >= area.z1 && localPoint.z <= area.z2)?.room : null;
   if (room && roomViews[room]) selectRoom(room);
 });
 
@@ -1103,6 +1299,7 @@ const keyToMove = {
 };
 
 window.addEventListener("keydown", (event) => {
+  if (event.target.matches?.("input, textarea, select, [contenteditable='true']")) return;
   const move = keyToMove[event.code];
   if (event.code === "KeyE" && state.mode === "walk") {
     const door = nearestDoor();
@@ -1121,26 +1318,42 @@ window.addEventListener("keyup", (event) => {
 
 $$('[data-move]').forEach((button) => {
   const move = button.dataset.move;
-  let pressedAt = 0;
   const start = (event) => {
-    pressedAt = performance.now();
+    button.setPointerCapture?.(event.pointerId);
     pressed.add(move);
     button.classList.add("is-pressed");
     event.preventDefault();
   };
   const end = (event) => {
-    if (event?.type === "pointerup" && performance.now() - pressedAt < 160) {
-      updateWalk(0.1);
-    }
     pressed.delete(move);
     button.classList.remove("is-pressed");
   };
   button.addEventListener("pointerdown", start);
-  button.addEventListener("click", (event) => { if (event.detail === 0) { pressed.add(move); updateWalk(0.1); pressed.delete(move); } });
+  button.addEventListener("click", (event) => { if (event.detail === 0) { pressed.add(move); updateWalk(0.08); pressed.delete(move); } });
   button.addEventListener("pointerup", end);
   button.addEventListener("pointercancel", end);
-  button.addEventListener("pointerleave", end);
+  button.addEventListener("lostpointercapture", end);
 });
+
+
+const WALK_SPEED_MIN = 0.25;
+const WALK_SPEED_MAX = 2.0;
+function readWalkSpeed() {
+  try {
+    const saved=localStorage.getItem("jiji-walk-speed");
+    const value=saved===null ? 0.65 : Number(saved);
+    return Number.isFinite(value) ? Math.max(0.25,Math.min(2.0,value)) : 0.65;
+  } catch (_) { return 0.65; }
+}
+function setWalkSpeed(value) {
+  if(!Number.isFinite(Number(value))) return;
+  state.walkSpeed=Math.max(WALK_SPEED_MIN,Math.min(WALK_SPEED_MAX,Number(value)));
+  $("#walkSpeed").value=String(state.walkSpeed);
+  $("#walkSpeedValue").textContent=state.walkSpeed.toFixed(2)+" 米/秒";
+  try { localStorage.setItem("jiji-walk-speed",String(state.walkSpeed)); } catch (_) { /* 私密模式仍能在当前页调整 */ }
+}
+window.addEventListener("blur",()=>pressed.clear());
+document.addEventListener("visibilitychange",()=>{ if(document.hidden) pressed.clear(); });
 
 const WALK_RADIUS = 0.16;
 
@@ -1195,12 +1408,12 @@ function updateWalk(delta) {
   let forwardAmount = Number(pressed.has('forward')) - Number(pressed.has('backward'));
   let rightAmount = Number(pressed.has('right')) - Number(pressed.has('left'));
   const length = Math.hypot(forwardAmount, rightAmount) || 1;
-  const speed = 2.05 * delta / length;
+  const speed = state.walkSpeed * delta / length;
   const dx = (-Math.sin(state.walkYaw) * forwardAmount + Math.cos(state.walkYaw) * rightAmount) * speed;
   const dz = (-Math.cos(state.walkYaw) * forwardAmount - Math.sin(state.walkYaw) * rightAmount) * speed;
   let x = camera.position.x + PLAN_CENTER.x;
   let z = camera.position.z + PLAN_CENTER.z;
-  // 分轴滑动避免在门框处卡住；每帧最大步长0.103m，不穿墙。
+  // 分轴滑动避免在门框处卡住；最快每帧步长0.1m，不穿墙。
   if (canStand(x + dx, z)) x += dx;
   if (canStand(x, z + dz)) z += dz;
   camera.position.set(x - PLAN_CENTER.x, 1.62, z - PLAN_CENTER.z);
@@ -1230,6 +1443,11 @@ function bindDoorButtons(scope) {
 
 function bindUI() {
   populateDoors();
+  $("#drawerList").innerHTML=drawers.map(drawer => '<button class="drawer-button" type="button" data-drawer="'+drawer.id+'"><span>'+drawer.label+'</span><small></small></button>').join("");
+  bindDrawerButtons($("#drawerList"));
+  updateDrawerButtons();
+  setWalkSpeed(state.walkSpeed);
+  $("#walkSpeed").addEventListener("input",event=>setWalkSpeed(event.target.value));
   $("#planView").addEventListener("click", showPlan);
   $("#interactDoor").addEventListener("click", () => { const door = nearestDoor(); if (door) toggleDoor(door.id); });
   $("#openAllDoors").addEventListener("click", () => { doors.forEach(door => { door.open = true; }); updateDoorButtons(); showToast("所有门已打开"); });
@@ -1346,7 +1564,9 @@ function openMobileSheet(type) {
   } else if (type === 'doors') {
     $('#sheetTitle').textContent = '门的开关';
     $('#sheetSubtitle').textContent = '也可直接点击3D门扇；漫游靠近门后可开关';
-    content.innerHTML = '<div class="door-list">' + $('#doorList').innerHTML + '</div>';
+    content.innerHTML = '<div class="door-list">' + $('#doorList').innerHTML + '</div><h3 class="drawer-heading">电视柜抽屉</h3><div class="drawer-list">'+$('#drawerList').innerHTML+'</div>'; 
+    bindDrawerButtons(content);
+    updateDrawerButtons();
     bindDoorButtons(content);
     updateDoorButtons();
   } else {
@@ -1407,6 +1627,7 @@ function animate(now) {
     updateWalk(delta);
   }
   updateDoors(delta);
+  updateDrawers(delta);
   updateDoorAction();
   canvas.dataset.cameraX = (camera.position.x + PLAN_CENTER.x).toFixed(3);
   canvas.dataset.cameraZ = (camera.position.z + PLAN_CENTER.z).toFixed(3);
@@ -1453,10 +1674,12 @@ window.JijiHome = {
   setMode,
   setScheme,
   toggleDoor,
+  toggleDrawer,
+  setWalkSpeed,
   showPlan,
 };
 
-    </script>
+</script>
     <script>
       window.setTimeout(function () {
         if (window.JijiHome) return;

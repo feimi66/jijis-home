@@ -1182,3 +1182,31 @@ a:focus-visible {
 }
 
 .stage.is-plan .scheme-card { display:none; }
+
+/* 漫游速度与抽屉操作 */
+.walk-settings { width:210px; padding:12px 14px; border:1px solid var(--line); border-radius:18px; background:rgba(255,253,248,.93); box-shadow:0 10px 30px #382c2014; backdrop-filter:blur(14px); }
+.speed-label { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; font-weight:650; }
+.speed-label output { color:var(--accent-dark); font-size:10px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+#walkSpeed { display:block; width:100%; height:32px; margin:7px 0 1px; accent-color:var(--accent); cursor:pointer; touch-action:pan-x; }
+.speed-range { display:flex; justify-content:space-between; color:var(--muted); font-size:9px; }
+.walk-settings .look-note { margin:9px 0 0; padding:0; background:none; color:var(--muted); font-size:9px; }
+.stage.is-walk .door-action { bottom:164px; }
+.stage.is-walk .toast { bottom:164px; }
+.drawer-list { display:grid; gap:7px; }
+.drawer-button { display:flex; justify-content:space-between; align-items:center; gap:8px; min-height:48px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; background:rgba(255,255,255,.65); cursor:pointer; text-align:left; }
+.drawer-button span { font-size:11px; font-weight:650; }
+.drawer-button small { font-size:9px; color:var(--muted); white-space:nowrap; }
+.drawer-button[aria-pressed="true"] { border-color:#93aa86; background:#edf2e9; }
+.drawer-heading { font-size:14px; margin:20px 0 10px; }
+@media(max-width:760px) {
+  .walk-controls { right:14px; gap:10px; }
+  .move-pad { flex:0 0 116px; }
+  .walk-settings { flex:1; min-width:0; width:auto; max-width:230px; padding:11px 12px; }
+  .stage.is-walk .door-action { bottom:152px; }
+  .stage.is-walk .toast { bottom:152px; }
+  .walk-settings .look-note { display:block; }
+}
+@media(max-width:350px) {
+  .move-pad { flex-basis:100px; width:100px; height:110px; }
+  .speed-label { flex-wrap:wrap; gap:3px; }
+}
