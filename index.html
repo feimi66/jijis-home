@@ -252,6 +252,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.03;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0xeae6dd);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xeae6dd);
@@ -275,10 +276,10 @@ controls.addEventListener("start", () => {
   state.cameraTween = null;
 });
 
-scene.add(new THREE.HemisphereLight(0xfffbf2, 0x8d8a80, 2.25));
-scene.add(new THREE.AmbientLight(0xfff8ec, 0.58));
+scene.add(new THREE.HemisphereLight(0xfffbf2, 0x8d8a80, 1.8));
+scene.add(new THREE.AmbientLight(0xfff8ec, 0.32));
 
-const sunlight = new THREE.DirectionalLight(0xfff1d3, 4.0);
+const sunlight = new THREE.DirectionalLight(0xfff1d3, 3.3);
 sunlight.position.set(-8, 15, -10);
 sunlight.castShadow = true;
 sunlight.shadow.mapSize.set(2048, 2048);
@@ -366,9 +367,54 @@ function makeTileTexture(base = "#ded8cc", grout = "#c6bfb4", size = 96) {
   return texture;
 }
 
-const woodTexture = makeWoodTexture();
-const tileTexture = makeTileTexture();
-const bathTexture = makeTileTexture("#d7d9d7", "#babfbd", 128);
+
+function createInteriorTextures() {
+  let seed=0x4a494a49;
+  const rnd=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+  const tau=Math.PI*2, clamp=n=>Math.max(0,Math.min(255,Math.round(n)));
+  function map(size,pixel,data=false) {
+    const c=document.createElement("canvas");c.width=c.height=size;
+    const ctx=c.getContext("2d"),image=ctx.createImageData(size,size);
+    for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+      const rgb=pixel(x,y,size),i=(y*size+x)*4;
+      image.data[i]=clamp(rgb[0]);image.data[i+1]=clamp(rgb[1]);image.data[i+2]=clamp(rgb[2]);image.data[i+3]=255;
+    }
+    ctx.putImageData(image,0,0);
+    const texture=new THREE.CanvasTexture(c);
+    texture.wrapS=texture.wrapT=THREE.RepeatWrapping;
+    texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+    texture.colorSpace=data ? THREE.NoColorSpace : THREE.SRGBColorSpace;
+    return texture;
+  }
+  function grain(x,y,n) {
+    const bend=Math.sin(x/n*tau)*1.5+Math.sin(x/n*tau*3)*.3;
+    return Math.sin(y/n*tau*7+bend*.3)*3-Math.pow(Math.max(0,Math.sin(y/n*tau*47+bend)),9)*4+(rnd()-.5)*2;
+  }
+  const oak=map(512,(x,y,n)=>{const s=grain(x,y,n);return [218+s,194+s,158+s];});
+  const tile=map(512,(x,y,n)=>{const edge=Math.min(x,y,n-1-x,n-1-y),s=(edge<2 ? -10 : edge<4 ? -2 : 0)+Math.sin(x/n*tau)*Math.sin(y/n*tau)*1.5+(rnd()-.5)*2;return [231+s,226+s,216+s];});
+  const planks=map(512,(x,y,n)=>{
+    const column=Math.floor(x/64),joint=Math.min(x%64,63-x%64);
+    const end=(y+column*91)%256;
+    const s=grain(y,x,n)+(column%3-1)*3-(joint<1 ? 10 : joint<2 ? 3 : 0)-(end<1 ? 5 : 0);
+    return [215+s,189+s,151+s];
+  });
+  const size=256,height=new Float32Array(size*size);
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+    const a=Math.sin(x*Math.PI/2),b=Math.sin(y*Math.PI/2);
+    height[y*size+x]=(a+b)*.16+a*b*.08+(rnd()-.5)*.03;
+  }
+  const cloth=map(size,(x,y)=>{const s=height[y*size+x]*9+(rnd()-.5);return [233+s,227+s,216+s];});
+  const sample=(x,y)=>height[((y+size)%size)*size+(x+size)%size];
+  const clothNormal=map(size,(x,y)=>{const dx=sample(x+1,y)-sample(x-1,y),dy=sample(x,y+1)-sample(x,y-1),length=Math.hypot(dx,dy,1);return [128-dx/length*127,128-dy/length*127,128+127/length];},true);
+  return {oak,tile,planks,cloth,clothNormal};
+}
+const interiorTextures=createInteriorTextures();
+
+const woodTexture=interiorTextures.planks;
+woodTexture.repeat.set(4.8,4.8);
+const tileTexture=interiorTextures.tile;
+tileTexture.repeat.set(8/.6,8/.6);
+const bathTexture=interiorTextures.tile.clone();bathTexture.repeat.set(16,16);
 
 const materials = {
   wall: new THREE.MeshStandardMaterial({ color: 0xf0ece3, roughness: 0.92 }),
@@ -415,6 +461,25 @@ const materials = {
   }),
 };
 
+
+materials.floorStone.color.set(0xffffff);
+materials.floorWood.color.set(0xffffff);
+materials.floorBath.color.set(0xf3f3ee);
+materials.oak.map=interiorTextures.oak; materials.oak.color.set(0xc9ae8c);
+materials.oakLight.map=interiorTextures.oak; materials.oakLight.color.set(0xffffff);
+materials.walnut.map=interiorTextures.oak; materials.walnut.color.set(0x886d54);
+[materials.fabric,materials.fabricDark].forEach(material=>{
+  material.map=interiorTextures.cloth; material.normalMap=interiorTextures.clothNormal;
+  material.normalScale=new THREE.Vector2(.08,.08);material.roughness=.96;
+});
+materials.fabric.color.set(0xe5dfd5);materials.fabricDark.color.set(0xbab1a2);
+materials.linen=materials.fabric.clone();materials.linen.color.set(0xffffff);
+materials.duvet=materials.fabric.clone();materials.duvet.color.set(0xaeb9a8);
+materials.porcelain=new THREE.MeshPhysicalMaterial({color:0xf6f5ef,roughness:.24,clearcoat:.6,clearcoatRoughness:.2});
+materials.chrome=new THREE.MeshStandardMaterial({color:0xc8c9c6,roughness:.25,metalness:.88});
+materials.baseboard=new THREE.MeshStandardMaterial({color:0xe9e4da,roughness:.65});
+materials.soil=new THREE.MeshStandardMaterial({color:0x514739,roughness:1});
+materials.leaf=materials.green.clone();materials.leaf.side=THREE.DoubleSide;materials.leaf.roughness=.65;
 const home = new THREE.Group();
 home.name = "吉吉的家";
 home.position.set(-PLAN_CENTER.x, 0, -PLAN_CENTER.z);
@@ -583,8 +648,14 @@ function addDoor({ id, label, x, z, width = 0.86, rotation = 0, hinge = 'left', 
   [-1, 1].forEach(side => box(pivot, center + side * (leafWidth / 2 - 0.02), DOOR_HEIGHT / 2, 0, 0.04, leafHeight, 0.07, trimMaterial));
   [DOOR_CLEARANCE + 0.025, DOOR_HEIGHT - DOOR_CLEARANCE - 0.025].forEach(y => box(pivot, center, y, 0, leafWidth, 0.05, 0.07, trimMaterial));
   const handleX = type === 'sliding' ? center - leafWidth / 2 + 0.09 : direction * (leafWidth - 0.13);
-  box(pivot, handleX, 1.0, 0.045, 0.12, 0.04, 0.05, materials.black);
-  box(pivot, handleX, 1.0, -0.045, 0.12, 0.04, 0.05, materials.black);
+  [-1,1].forEach(side=>{
+    const rose=cylinder(pivot,handleX,1.0,side*.031,.024,.016,materials.chrome,24);rose.rotation.x=Math.PI/2;
+    if(type==="sliding")rod(pivot,[handleX,.91,side*.052],[handleX,1.09,side*.052],.009,materials.black);
+    else {
+      rod(pivot,[handleX,1.0,side*.038],[handleX,1.0,side*.070],.011,materials.chrome);
+      rod(pivot,[handleX,1.0,side*.070],[handleX-direction*.12,1.0,side*.070],.008,materials.chrome);
+    }
+  });
   if (type === 'sliding') {
     const fixed = box(group, width / 4, DOOR_HEIGHT / 2, -0.045, width / 2, leafHeight, 0.035, materials.glass);
     fixed.userData.doorId = id;
@@ -770,72 +841,288 @@ function finishStructure() {
 
 finishStructure();
 
-function addRug(parent, x, z, width, depth, color = 0xb9a98f) {
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 1 });
-  return box(parent, x, 0.018, z, width, 0.035, depth, mat, { receiveShadow: true, castShadow: false });
-}
 
-function addPlant(parent, x, z, scale = 1) {
-  cylinder(parent, x, 0.22 * scale, z, 0.18 * scale, 0.42 * scale, materials.terracotta, 18);
-  const leafGeometry = new THREE.IcosahedronGeometry(0.34 * scale, 1);
-  const leaf = new THREE.Mesh(leafGeometry, materials.green);
-  leaf.position.set(x, 0.72 * scale, z);
-  leaf.scale.set(0.86, 1.2, 0.86);
-  leaf.castShadow = true;
-  parent.add(leaf);
+function objectMesh(parent,geometry,material,x=0,y=0,z=0,name="") {
+  const mesh=new THREE.Mesh(geometry,material);mesh.position.set(x,y,z);
+  mesh.castShadow=true;mesh.receiveShadow=true;if(name)mesh.name=name;parent.add(mesh);return mesh;
 }
-
-function addChair(parent, x, z, rotation = 0, material = materials.fabricDark) {
-  const group = new THREE.Group();
-  box(group, 0, 0.46, 0, 0.48, 0.12, 0.5, material);
-  box(group, 0, 0.8, 0.21, 0.48, 0.65, 0.11, material);
-  [[-0.18, -0.18], [0.18, -0.18], [-0.18, 0.18], [0.18, 0.18]].forEach(([px, pz]) => {
-    box(group, px, 0.22, pz, 0.055, 0.44, 0.055, materials.black);
-  });
-  group.position.set(x, 0, z);
-  group.rotation.y = rotation;
-  parent.add(group);
-  return group;
+function rod(parent,start,end,radius=.018,material=materials.chrome) {
+  const a=new THREE.Vector3(...start),b=new THREE.Vector3(...end),direction=b.clone().sub(a);
+  const mesh=objectMesh(parent,new THREE.CylinderGeometry(radius,radius,direction.length(),16),material);
+  mesh.position.copy(a.add(b).multiplyScalar(.5));mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.normalize());return mesh;
 }
-
-function addBed(parent, x, z, width = 1.8, depth = 2.0, rotation = 0) {
-  const group = new THREE.Group();
-  [[-width/2+0.16,-depth/2+0.16],[width/2-0.16,-depth/2+0.16],[-width/2+0.16,depth/2-0.16],[width/2-0.16,depth/2-0.16]].forEach(([px,pz]) => box(group,px,0.037,pz,0.07,0.074,0.07,materials.oak));
-  box(group, 0, 0.24, 0, width, 0.36, depth, materials.oak);
-  box(group, 0, 0.48, -0.02, width - 0.12, 0.3, depth - 0.16, materials.offWhite);
-  box(group, 0, 0.78, -depth / 2 + 0.06, width, 1.15, 0.13, materials.fabric);
-  box(group, -width * 0.25, 0.69, -depth * 0.28, width * 0.42, 0.16, 0.5, materials.offWhite);
-  box(group, width * 0.25, 0.69, -depth * 0.28, width * 0.42, 0.16, 0.5, materials.offWhite);
-  group.position.set(x, 0, z);
-  group.rotation.y = rotation;
-  parent.add(group);
-  return group;
+function ring(parent,x,y,z,radius,tube,material,scaleX=1,scaleZ=1) {
+  const mesh=objectMesh(parent,new THREE.TorusGeometry(radius,tube,10,40),material,x,y,z);
+  mesh.rotation.x=Math.PI/2;mesh.scale.set(scaleX,scaleZ,1);return mesh;
 }
-
-function addMonitor(parent, x, z, rotation = 0, scale = 1) {
-  const group = new THREE.Group();
-  box(group, 0, 1.11 * scale, 0, 0.67 * scale, 0.4 * scale, 0.045 * scale, materials.screen);
-  box(group, 0, 0.86 * scale, 0.04 * scale, 0.06 * scale, 0.24 * scale, 0.06 * scale, materials.black);
-  box(group, 0, 0.74 * scale, 0.04 * scale, 0.28 * scale, 0.035 * scale, 0.16 * scale, materials.black);
-  group.position.set(x, 0, z);
-  group.rotation.y = rotation;
-  parent.add(group);
-  return group;
-}
-
-function addCabinet(parent, x, z, width, depth, height, material = materials.oakLight, rotation = 0) {
-  const group = new THREE.Group();
-  box(group, 0, height / 2, 0, width, height, depth, material);
-  const divisions = Math.max(1, Math.round(width / 0.72));
-  for (let i = 1; i < divisions; i += 1) {
-    box(group, -width / 2 + (width / divisions) * i, height / 2, depth / 2 + 0.003, 0.012, height * 0.9, 0.01, materials.black);
+function softBox(parent,x,y,z,w,h,d,material=materials.fabric,radius=.06,puff=.012,name="soft-cushion") {
+  const geometry=new RoundedBoxGeometry(w,h,d,4,Math.min(radius,w/2,h/2,d/2));
+  const p=geometry.attributes.position,n=geometry.attributes.normal;
+  for(let i=0;i<p.count;i++){
+    const px=p.getX(i),py=p.getY(i),pz=p.getZ(i),a=px/(w/2),b=pz/(d/2),sign=Math.sign(py);
+    const vx=Math.max(0,1-a*a),vz=Math.max(0,1-b*b);
+    const dx=sign*puff*(-4*a/w)*vz,dz=sign*puff*(-4*b/d)*vx;
+    p.setY(i,py+sign*puff*vx*vz);
+    const normal=new THREE.Vector3(n.getX(i)-n.getY(i)*dx,n.getY(i),n.getZ(i)-n.getY(i)*dz).normalize();
+    n.setXYZ(i,normal.x,normal.y,normal.z);
   }
-  group.position.set(x, 0, z);
-  group.rotation.y = rotation;
-  parent.add(group);
+  geometry.computeBoundingBox();geometry.computeBoundingSphere();
+  const mesh=objectMesh(parent,geometry,material,x,y,z,name);mesh.userData.soft=true;return mesh;
+}
+function curvedBack(parent,x,y,z,w,h,d,material,lean=.1) {
+  const mesh=softBox(parent,x,y,z,w,h,d,material,.045,.006,"curved-chair-back");
+  const p=mesh.geometry.attributes.position,n=mesh.geometry.attributes.normal;
+  for(let i=0;i<p.count;i++){
+    const px=p.getX(i),slope=-.16*px/(w*w/4);
+    p.setZ(i,p.getZ(i)-.08*Math.pow(px/(w/2),2));
+    const normal=new THREE.Vector3(n.getX(i)-n.getZ(i)*slope,n.getY(i),n.getZ(i)).normalize();
+    n.setXYZ(i,normal.x,normal.y,normal.z);
+  }
+  mesh.geometry.computeBoundingBox();mesh.geometry.computeBoundingSphere();mesh.rotation.x=lean;return mesh;
+}
+function outline(parent,points,material=materials.fabricDark) {
+  const geometry=new THREE.BufferGeometry().setFromPoints(points.map(p=>new THREE.Vector3(...p)));
+  const line=new THREE.LineLoop(geometry,new THREE.LineBasicMaterial({color:material.color,transparent:true,opacity:.35}));
+  parent.add(line);return line;
+}
+function addSkirting() {
+  const group=new THREE.Group();group.name="墙脚收口";wallsGroup.add(group);
+  const seen=new Set();
+  wallSegments.forEach(s=>{
+    const key=[s.x1,s.z1,s.x2,s.z2].join(",");if(seen.has(key))return;seen.add(key);
+    if(Math.abs(s.z1-9.2)<.001 && s.x1>=1.99 && s.x2<=5.71 && s.x2>s.x1) return;
+    const horizontal=Math.abs(s.z1-s.z2)<1e-5, length=Math.hypot(s.x2-s.x1,s.z2-s.z1);
+    if(length<.025)return;
+    for(const side of [-1,1]){
+      const x=(s.x1+s.x2)/2+(horizontal ? 0 : side*.07),z=(s.z1+s.z2)/2+(horizontal ? side*.07 : 0);
+      if(!floorAreas.some(a=>x>a.x1 && x<a.x2 && z>a.z1 && z<a.z2))continue;
+      box(group,x,.033,z,horizontal?length:.018,.066,horizontal?.018:length,materials.baseboard,{radius:0});
+    }
+  });
+  unifyBoxSurfaces(group,[...group.children],materials.baseboard,"continuous-skirting");
+}
+function addSofa(parent) {
+  const group=new THREE.Group();group.name="客厅软包沙发";parent.add(group);
+  const locations=[[2.02,5.5],[2.43,5.5],[2.02,7.75],[2.43,7.75],[3.58,7.46],[3.58,7.84]];
+  locations.forEach(([x,z])=>rod(group,[x,.015,z],[x,.155,z],.023,materials.walnut));
+  softBox(group,2.24,.23,6.65,.92,.22,2.74,materials.fabric,.045,.002,"sofa-base");
+  softBox(group,3.20,.23,7.64,1.03,.22,.80,materials.fabric,.045,.002,"sofa-return-base");
+  [5.82,6.64,7.46].forEach(z=>softBox(group,2.35,.40,z,.68,.155,.78,materials.fabric,.065,.020,"sofa-seat"));
+  softBox(group,3.20,.40,7.60,1.02,.155,.68,materials.fabric,.065,.020,"sofa-seat");
+  softBox(group,1.88,.69,6.66,.17,.67,2.55,materials.fabric,.075,.016,"sofa-back");
+  softBox(group,3.15,.69,7.98,1.32,.67,.17,materials.fabric,.07,.016,"sofa-back");
+  softBox(group,2.27,.60,5.33,.78,.48,.18,materials.fabric,.075,.016,"sofa-arm");
+  softBox(group,3.77,.59,7.64,.16,.46,.77,materials.fabric,.06,.014,"sofa-arm");
+  [[2.04,.70,5.87,.38],[2.04,.70,7.23,-.25],[3.25,.70,7.81,.10]].forEach(([x,y,z,tilt])=>{
+    const pillow=softBox(group,x,y,z,.14,.39,.42,materials.linen,.07,.025,"throw-pillow");
+    pillow.rotation.z=tilt;pillow.rotation.x=-.10;
+  });
+  return group;
+}
+function addDesk(parent,x,z,width,depth=.6,rotation=0) {
+  const group=new THREE.Group();group.position.set(x,0,z);group.rotation.y=rotation;group.name="细腿书桌";parent.add(group);
+  box(group,0,.775,0,width,.05,depth,materials.oakLight,{radius:.012});
+  for(const a of [-1,1])for(const b of [-1,1])rod(group,[a*(width/2-.12),.015,b*(depth/2-.08)],[a*(width/2-.12),.75,b*(depth/2-.08)],.024,materials.black);
+  return group;
+}
+function addOfficeChair(parent,x,z,rotation=0) {
+  const group=new THREE.Group();group.position.set(x,0,z);group.rotation.y=rotation;group.name="办公椅";parent.add(group);
+  softBox(group,0,.475,0,.49,.12,.48,materials.fabricDark,.06,.013);
+  curvedBack(group,0,.85,.23,.47,.67,.10,materials.fabricDark,.10);
+  rod(group,[0,.12,0],[0,.42,0],.042,materials.chrome);
+  for(let i=0;i<5;i++){
+    const angle=i*Math.PI*2/5,xp=Math.cos(angle)*.29,zp=Math.sin(angle)*.29;
+    rod(group,[0,.15,0],[xp,.065,zp],.020,materials.black);
+    const wheel=objectMesh(group,new THREE.CylinderGeometry(.044,.044,.04,20),materials.black,xp,.045,zp);
+    wheel.rotation.x=Math.PI/2;
+  }
+  for(const side of [-1,1]){
+    rod(group,[side*.22,.47,.09],[side*.28,.65,.06],.014,materials.black);
+    softBox(group,side*.28,.668,.025,.075,.04,.25,materials.black,.018,.002);
+  }
+  return group;
+}
+function addDuvet(parent,width,depth) {
+  const span=depth*.72,start=-depth*.20,end=depth/2+.08;
+  const geometry=new THREE.PlaneGeometry(width+.18,end-start,26,26),p=geometry.attributes.position,uv=geometry.attributes.uv;
+  for(let i=0;i<p.count;i++){
+    const x=p.getX(i),z=start+(uv.getY(i))*(end-start);
+    const drop=Math.max(Math.max(0,Math.abs(x)-(width/2-.02))/.11,Math.max(0,z-(depth/2-.025))/.105);
+    const wave=.010*Math.sin(x*14+z*8)+.005*Math.sin(x*27-z*13);
+    p.setXYZ(i,x,.575-Math.min(.18,drop*.18)+wave,z);
+  }
+  const indices=geometry.index;
+  for(let i=0;i<indices.count;i+=3){const a=indices.getX(i+1);indices.setX(i+1,indices.getX(i+2));indices.setX(i+2,a);}
+  geometry.computeVertexNormals();geometry.computeBoundingBox();geometry.computeBoundingSphere();
+  const material=materials.duvet.clone();material.side=THREE.DoubleSide;
+  objectMesh(parent,geometry,material,0,0,0,"folded-duvet");
+  softBox(parent,0,.575,start+.055,width-.035,.06,.14,materials.linen,.025,.004,"duvet-fold");
+}
+function addBasin(parent,x,y,z,material=materials.porcelain,w=.64,d=.42) {
+  const profile=[[0,-.115],[.08,-.115],[.21,-.075],[.262,.012],[.278,.019],[.286,.005],[.258,-.09],[.10,-.142],[0,-.142]].map(p=>new THREE.Vector2(...p));
+  const basin=objectMesh(parent,new THREE.LatheGeometry([...profile].reverse(),40),material,x,y,z,"hollow-basin");
+  basin.scale.set(w/.572,1,d/.572);
+  const drain=cylinder(parent,x,y-.107,z,.025,.008,materials.chrome,24);
+  return basin;
+}
+function addFaucet(parent,x,y,z) {
+  const path=new THREE.CatmullRomCurve3([new THREE.Vector3(x,y,z),new THREE.Vector3(x,y+.20,z),new THREE.Vector3(x,y+.24,z+.02),new THREE.Vector3(x,y+.23,z+.12),new THREE.Vector3(x,y+.18,z+.12)]);
+  objectMesh(parent,new THREE.TubeGeometry(path,20,.009,10,false),materials.chrome,0,0,0,"tap");
+  rod(parent,[x,y+.13,z],[x+.075,y+.14,z],.007,materials.chrome);
+}
+function addToilet(parent,x,z) {
+  const group=new THREE.Group();group.position.set(x,0,z);group.name="坐便器";parent.add(group);
+  const profile=[[.105,.01],[.13,.07],[.13,.20],[.205,.30],[.25,.38],[.247,.425],[.215,.425],[.18,.36],[.12,.25],[.105,.01]].map(p=>new THREE.Vector2(...p));
+  const bowl=objectMesh(group,new THREE.LatheGeometry(profile,40),materials.porcelain,0,0,-.015,"toilet-bowl");
+  bowl.scale.set(.9,1,1.23);
+  ring(group,0,.44,-.025,.218,.024,materials.porcelain,.91,1.22);
+  cylinder(group,0,.382,-.035,.135,.009,new THREE.MeshStandardMaterial({color:0xdbe3e1,roughness:.16}),32).scale.z=1.2;
+  box(group,0,.66,.225,.37,.40,.17,materials.porcelain,{radius:.048,name:"toilet-tank"});
+  cylinder(group,0,.867,.225,.027,.012,materials.chrome,24);
+  const lid=softBox(group,0,.685,.134,.405,.47,.035,materials.porcelain,.017,.002,"toilet-lid");
+  lid.rotation.x=.11;
+  return group;
+}
+function addWasher(parent,x,z) {
+  const group=new THREE.Group();group.position.set(x,0,z);group.name="滚筒洗衣机";parent.add(group);
+  box(group,0,.445,0,.58,.85,.62,materials.porcelain,{radius:.028});
+  box(group,0,.80,.316,.515,.095,.012,materials.offWhite,{radius:.004});
+  const knob=objectMesh(group,new THREE.CylinderGeometry(.03,.03,.017,24),materials.chrome,-.16,.80,.331);knob.rotation.x=Math.PI/2;
+  box(group,.105,.80,.333,.15,.046,.009,materials.black,{radius:.003});
+  const lip=objectMesh(group,new THREE.TorusGeometry(.192,.025,12,48),materials.chrome,0,.45,.329);
+  const gasket=objectMesh(group,new THREE.TorusGeometry(.164,.013,10,40),materials.black,0,.45,.339);
+  const door=objectMesh(group,new THREE.SphereGeometry(1,24,16),new THREE.MeshPhysicalMaterial({color:0x34464b,roughness:.14,metalness:.15,clearcoat:1}),0,.45,.347);
+  door.scale.set(.155,.155,.025);
+  box(group,.185,.47,.361,.018,.115,.024,materials.offWhite,{radius:.008});
+  return group;
+}
+function addNightstand(parent,x,z) {
+  const group=new THREE.Group();group.position.set(x,0,z);group.name="床头柜";parent.add(group);
+  box(group,0,.31,0,.46,.53,.48,materials.walnut,{radius:.018});
+  for(const y of [.19,.44]) {
+    box(group,0,y,.246,.433,.229,.019,materials.oakLight,{radius:.006});
+    rod(group,[-.08,y+.04,.267],[.08,y+.04,.267],.005,materials.chrome);
+  }
+  for(const a of [-1,1])for(const b of [-1,1])rod(group,[a*.16,.0,b*.17],[a*.16,.075,b*.17],.018,materials.walnut);
+  return group;
+}
+function addPC(parent,x,z) {
+  const group=new THREE.Group();group.position.set(x,0,z);group.name="电脑主机";parent.add(group);
+  box(group,0,.275,0,.23,.49,.43,materials.black,{radius:.016});
+  for(const y of [.17,.35]) {
+    const fan=objectMesh(group,new THREE.TorusGeometry(.056,.004,6,24),materials.chrome,0,y,.221);
+    for(let i=0;i<5;i++){const a=i*Math.PI*2/5;rod(group,[0,y,.224],[Math.cos(a)*.043,y+Math.sin(a)*.043,.224],.003,materials.fabricDark);}
+  }
+  box(group,-.105,.50,.03,.004,.009,.16,materials.chrome,{radius:0});
+  return group;
+}
+function addWindowShade(parent,x,z,width) {
+  const group=new THREE.Group();group.position.set(x,0,z);group.name="布艺窗帘";parent.add(group);
+  rod(group,[-width/2-.06,2.45,.12],[width/2+.06,2.45,.12],.008,materials.chrome);
+  const material=materials.linen.clone();material.side=THREE.DoubleSide;
+  for(const side of [-1,1]){
+    const geometry=new THREE.PlaneGeometry(.24,2.22,14,18),p=geometry.attributes.position;
+    for(let i=0;i<p.count;i++){const a=p.getX(i),y=p.getY(i);p.setZ(i,Math.sin(a*95)*.023+(y+1.11)*.002);}
+    geometry.computeVertexNormals();
+    const curtain=objectMesh(group,geometry,material,side*(width/2-.06),1.30,.16,"pleated-curtain");
+    curtain.castShadow=false;
+  }
   return group;
 }
 
+addSkirting();
+
+function addRug(parent,x,z,width,depth,color=0xb9a98f) {
+  const material=materials.fabric.clone();material.color.set(color);
+  return box(parent,x,.006,z,width,.009,depth,material,{radius:.004,castShadow:false,receiveShadow:true,name:"woven-rug"});
+}
+
+function addPlant(parent,x,z,scale=1) {
+  const group=new THREE.Group();group.position.set(x,0,z);group.scale.setScalar(scale);group.name="叶片盆栽";parent.add(group);
+  const profile=[[.105,0],[.135,.025],[.173,.31],[.175,.35],[.156,.35],[.153,.325],[.135,.05],[.105,0]].map(p=>new THREE.Vector2(...p));
+  objectMesh(group,new THREE.LatheGeometry(profile,32),materials.terracotta,0,0,0,"ceramic-planter");
+  cylinder(group,0,.324,0,.15,.024,materials.soil,24);
+  const shape=new THREE.Shape();shape.moveTo(0,0);shape.bezierCurveTo(.30,.23,.27,.70,0,1);shape.bezierCurveTo(-.27,.70,-.30,.23,0,0);
+  const leafGeometry=new THREE.ShapeGeometry(shape,10),p=leafGeometry.attributes.position;
+  for(let i=0;i<p.count;i++)p.setZ(i,Math.sin(p.getY(i)*Math.PI)*.11);
+  leafGeometry.computeVertexNormals();
+  const leaves=new THREE.InstancedMesh(leafGeometry,materials.leaf,30),dummy=new THREE.Object3D();
+  for(let stem=0;stem<3;stem++){
+    const angle=stem*2.4,top=.95+stem*.08,xp=Math.cos(angle)*.10,zp=Math.sin(angle)*.10;
+    rod(group,[0,.32,0],[xp,top,zp],.0055,materials.walnut);
+    for(let j=0;j<10;j++){
+      const a=j*2.38+stem,y=.43+j*.05,spread=.075+j*.008;
+      dummy.position.set(xp*.5+Math.cos(a)*spread,y,zp*.5+Math.sin(a)*spread);
+      dummy.rotation.set(-.30-j*.025,a,.25*Math.sin(a));dummy.scale.set(.30,.31,.30);dummy.updateMatrix();leaves.setMatrixAt(stem*10+j,dummy.matrix);
+    }
+  }
+  leaves.castShadow=true;leaves.receiveShadow=true;group.add(leaves);return group;
+}
+
+function addChair(parent,x,z,rotation=0,material=materials.fabricDark) {
+  const group=new THREE.Group();group.position.set(x,0,z);group.rotation.y=rotation;group.name="曲面餐椅";parent.add(group);
+  softBox(group,0,.452,0,.48,.105,.50,material,.048,.012);
+  curvedBack(group,0,.795,.25,.48,.45,.07,material,.12);
+  for(const a of [-1,1])for(const b of [-1,1])rod(group,[a*.225,.012,b*.21],[a*.17,.43,b*.15],.020,materials.oak);
+  return group;
+}
+
+function addBed(parent,x,z,width=1.8,depth=2,rotation=0) {
+  const group=new THREE.Group();group.position.set(x,0,z);group.rotation.y=rotation;group.name="软床与床品";parent.add(group);
+  for(const a of [-1,1])for(const b of [-1,1])rod(group,[a*(width/2-.16),.0,b*(depth/2-.15)],[a*(width/2-.16),.13,b*(depth/2-.15)],.028,materials.walnut);
+  box(group,0,.22,0,width+.055,.23,depth+.04,materials.oak,{radius:.025});
+  softBox(group,0,.42,-.01,width-.055,.235,depth-.04,materials.linen,.095,.012,"mattress");
+  softBox(group,0,.73,-depth/2+.01,width+.06,1.18,.16,materials.fabric,.075,.012,"upholstered-headboard");
+  for(const side of [-1,1]){
+    const pillow=softBox(group,side*width*.24,.61,-depth*.32,width*.41,.16,.49,materials.linen,.074,.035,"sleeping-pillow");
+    pillow.rotation.y=side*.04;pillow.rotation.z=side*.025;
+  }
+  outline(group,[[-width/2+.055,.44,-depth/2+.04],[width/2-.055,.44,-depth/2+.04],[width/2-.055,.44,depth/2-.04],[-width/2+.055,.44,depth/2-.04]],materials.fabricDark);
+  addDuvet(group,width,depth);return group;
+}
+
+let desktopTexture=null,keyboardTexture=null;
+function addMonitor(parent,x,z,rotation=0,scale=1) {
+  const group=new THREE.Group();group.position.set(x,0,z);group.rotation.y=rotation;group.name="电脑显示器";parent.add(group);
+  if(!desktopTexture){
+    const c=document.createElement("canvas");c.width=512;c.height=288;const ctx=c.getContext("2d");
+    const gradient=ctx.createLinearGradient(0,0,512,288);gradient.addColorStop(0,"#315c69");gradient.addColorStop(1,"#b6c8b6");ctx.fillStyle=gradient;ctx.fillRect(0,0,512,288);
+    ctx.fillStyle="rgba(250,251,247,.85)";ctx.fillRect(48,42,215,155);ctx.fillStyle="#93aaa4";for(let j=0;j<5;j++)ctx.fillRect(63,62+j*23,170-j*16,6);
+    ctx.fillStyle="#eee9dd";ctx.fillRect(288,75,168,121);ctx.fillStyle="#657d77";ctx.fillRect(307,97,128,66);ctx.fillStyle="#c6d0c6";ctx.fillRect(0,267,512,21);
+    desktopTexture=new THREE.CanvasTexture(c);desktopTexture.colorSpace=THREE.SRGBColorSpace;
+  }
+  box(group,0,1.075,0,.665*scale,.395*scale,.034,materials.black,{radius:.01,name:"monitor-body"});
+  objectMesh(group,new THREE.PlaneGeometry(.633*scale,.356*scale),new THREE.MeshBasicMaterial({map:desktopTexture,toneMapped:false}),0,1.078,.019,"monitor-display");
+  rod(group,[0,.809,-.025],[0,.97,-.025],.016,materials.chrome);
+  box(group,0,.809,-.025,.25,.018,.14,materials.black,{radius:.006});
+  if(!keyboardTexture){
+    const c=document.createElement("canvas");c.width=512;c.height=180;const ctx=c.getContext("2d");ctx.fillStyle="#393b39";ctx.fillRect(0,0,512,180);
+    ctx.fillStyle="#696c68";for(let row=0;row<4;row++)for(let col=0;col<13;col++)ctx.fillRect(9+col*38,8+row*32,31,25);ctx.fillRect(126,141,232,28);
+    keyboardTexture=new THREE.CanvasTexture(c);keyboardTexture.colorSpace=THREE.SRGBColorSpace;
+  }
+  box(group,-.03,.814,.19,.35,.022,.125,materials.black,{radius:.008,name:"keyboard"});
+  const keys=objectMesh(group,new THREE.PlaneGeometry(.332,.112),new THREE.MeshBasicMaterial({map:keyboardTexture,toneMapped:false}),-.03,.826,.19);keys.rotation.x=-Math.PI/2;
+  const mouse=objectMesh(group,new THREE.SphereGeometry(1,16,10),materials.black,.22,.829,.185);mouse.scale.set(.032,.024,.055);
+  return group;
+}
+
+function addCabinet(parent,x,z,width,depth,height,material=materials.oakLight,rotation=0,omitTop=false) {
+  const group=new THREE.Group();group.position.set(x,0,z);group.rotation.y=rotation;group.name="木纹收纳柜";parent.add(group);
+  for(const side of [-1,1])box(group,side*(width/2-.01),(height+.08)/2,0,.02,height-.08,depth,material,{radius:.005});
+  box(group,0,.097,0,width-.04,.034,depth-.022,material,{radius:.004});
+  box(group,0,(height+.08)/2,-depth/2+.01,width-.04,height-.08,.02,material,{radius:.003});
+  if(!omitTop)box(group,0,height-.013,0,width,.026,depth,material,{radius:.006,name:"cabinet-top"});
+  box(group,0,height*.48,0,width-.04,.022,depth-.04,material,{radius:.003});
+  box(group,0,.045,-.022,width-.07,.09,depth-.08,materials.walnut,{radius:.003});
+  const divisions=Math.max(1,Math.round(width/.62)),doorWidth=width/divisions;
+  for(let i=0;i<divisions;i++){
+    const px=-width/2+doorWidth*(i+.5);
+    box(group,px,(height+.08)/2,depth/2+.009,doorWidth-.004,height-.095,.019,material,{radius:.004,name:"cabinet-door"});
+    const hx=px+doorWidth/2-.05;
+    rod(group,[hx,height*.49,depth/2+.034],[hx,height*.49+.14,depth/2+.034],.0045,materials.chrome);
+  }
+  return group;
+}
 
 function makeTVScreenTexture() {
   const c=document.createElement("canvas"); c.width=1024; c.height=576;
@@ -920,75 +1207,120 @@ function bindDrawerButtons(scope) {
 
 // 家具位置与重建后的房间保持同一坐标，不占用过道及门扇回转区。
 addRug(furnitureGroup, 3.65, 6.7, 2.65, 2.9, 0xb9aa93);
-box(furnitureGroup, 2.2, 0.43, 6.65, 0.78, 0.76, 2.75, materials.fabric);
-box(furnitureGroup, 3.18, 0.43, 7.65, 1.2, 0.76, 0.78, materials.fabric);
-box(furnitureGroup, 1.93, 0.74, 6.65, 0.16, 0.64, 2.72, materials.fabricDark);
-box(furnitureGroup, 3.1, 0.74, 7.93, 1.4, 0.64, 0.16, materials.fabricDark);
-box(furnitureGroup, 3.6, 0.27, 6.55, 1.2, 0.35, 0.65, materials.oakLight);
-[[3.16,6.33],[4.04,6.33],[3.16,6.77],[4.04,6.77]].forEach(([x,z]) => box(furnitureGroup,x,0.06,z,0.075,0.12,0.075,materials.oak));
-[[2.02,5.5],[2.38,5.5],[2.02,7.77],[2.38,7.77],[3.58,7.46],[3.58,7.84]].forEach(([x,z]) => box(furnitureGroup,x,0.034,z,0.07,0.068,0.07,materials.oak));
+addSofa(furnitureGroup);
+
 addTVConsole(furnitureGroup, 5.82, 7.32);
 box(furnitureGroup, 3.45, 0.75, 2.9, 1.55, 0.09, 0.88, materials.oakLight);
-box(furnitureGroup, 3.45, 0.37, 2.9, 0.12, 0.75, 0.58, materials.black);
+[[-.58,-.29],[.58,-.29],[-.58,.29],[.58,.29]].forEach(([px,pz]) =>
+  rod(furnitureGroup,[3.45+px,.055,2.9+pz],[3.45+px*.9,.705,2.9+pz*.9],.035,materials.oak));
 [[2.9,2.26,Math.PI],[3.9,2.26,Math.PI],[2.9,3.54,0],[3.9,3.54,0]].forEach(([x,z,r])=>addChair(furnitureGroup,x,z,r,materials.fabric));
-addPlant(furnitureGroup, 1.9, 3.45, 0.8);
+// 客厅与餐厅保留通畅活动空间，已移除盆栽和茶几。
 
 // 厨房与阳台A。
-box(furnitureGroup, 0.3, 0.46, 0.8, 0.52, 0.9, 1.34, materials.oakLight);
-box(furnitureGroup, 1.38, 0.46, 0.27, 1.65, 0.9, 0.52, materials.oakLight);
-box(furnitureGroup, 0.32, 1.64, 0.8, 0.43, 0.68, 1.25, materials.offWhite);
-box(furnitureGroup, 1.42, 1.64, 0.29, 1.55, 0.68, 0.4, materials.offWhite);
+addCabinet(furnitureGroup,.3,.8,1.34,.52,.9,materials.oakLight,Math.PI/2);
+addCabinet(furnitureGroup,1.38,.27,1.65,.52,.9,materials.oakLight,0,true);
+const upperKitchen = new THREE.Group(); upperKitchen.position.y=1.36; furnitureGroup.add(upperKitchen);
+addCabinet(upperKitchen,.25,.8,1.25,.4,.62,materials.offWhite,Math.PI/2);
+
 const kitchenCounter = [
   box(furnitureGroup,0.3,0.9225,0.8,0.58,0.035,1.4,materials.offWhite,{radius:0}),
-  box(furnitureGroup,1.38,0.9225,0.27,1.72,0.035,0.58,materials.offWhite,{radius:0}),
+  box(furnitureGroup,.8075,.9225,.27,.575,.035,.58,materials.offWhite,{radius:0}),
+  box(furnitureGroup,1.9325,.9225,.27,.615,.035,.58,materials.offWhite,{radius:0}),
+  box(furnitureGroup,1.36,.9225,.025,.53,.035,.09,materials.offWhite,{radius:0}),
+  box(furnitureGroup,1.36,.9225,.525,.53,.035,.07,materials.offWhite,{radius:0}),
 ];
 unifyBoxSurfaces(furnitureGroup,kitchenCounter,materials.offWhite,"continuous-kitchen-counter");
-box(furnitureGroup, 1.27, 0.956, 0.27, 0.7, 0.032, 0.45, materials.black);
-box(furnitureGroup, 3.1, 0.5, 0.45, 0.58, 0.98, 0.64, materials.offWhite);
-const washerDoor = cylinder(furnitureGroup, 3.1, 0.5, 0.11, 0.2, 0.035, materials.black, 32);
-washerDoor.rotation.x = Math.PI / 2;
+addBasin(furnitureGroup,1.36,.942,.28,materials.chrome,.57,.46);
+addFaucet(furnitureGroup,1.36,.95,.067);
+const hob=box(furnitureGroup,.3,.956,.85,.44,.027,.63,materials.black,{radius:.012,name:"kitchen-hob"});
+[.68,1.02].forEach(pz=>{
+  cylinder(furnitureGroup,.3,.977,pz,.096,.012,materials.chrome,32);
+  ring(furnitureGroup,.3,.986,pz,.071,.010,materials.black);
+  rod(furnitureGroup,[.21,.99,pz],[.39,.99,pz],.009,materials.black);
+  rod(furnitureGroup,[.3,.99,pz-.09],[.3,.99,pz+.09],.009,materials.black);
+});
+[.16,.23].forEach(px=>cylinder(furnitureGroup,px,.98,1.10,.015,.013,materials.chrome,16));
+box(furnitureGroup,.28,1.47,.84,.47,.10,.62,materials.chrome,{radius:.025,name:"range-hood"});
+box(furnitureGroup,.15,1.83,.84,.21,.63,.32,materials.chrome);
+const fridge=new THREE.Group(); fridge.name="双门冰箱"; fridge.position.set(2.43,0,.34); furnitureGroup.add(fridge);
+box(fridge,0,.96,0,.44,1.92,.49,materials.offWhite,{radius:.025});
+box(fridge,0,1.60,.258,.424,.60,.022,materials.porcelain,{radius:.018});
+box(fridge,0,.657,.258,.424,1.25,.022,materials.porcelain,{radius:.018});
+rod(fridge,[-.15,1.06,.295],[-.15,1.34,.295],.007,materials.chrome);
+rod(fridge,[-.15,1.66,.295],[-.15,1.88,.295],.007,materials.chrome);
+addWasher(furnitureGroup,3.1,.45);
+
 addPlant(furnitureGroup, 4.55, 0.42, 0.75);
 
 // 电竞房的南侧1m门区保持空旷。
-box(furnitureGroup, 6.9, 0.76, 1.05, 2.2, 0.1, 0.66, materials.oakLight);
+addDesk(furnitureGroup,6.9,1.05,2.2,.66);
 addMonitor(furnitureGroup, 6.32, 1.12, 0, 0.94); addMonitor(furnitureGroup, 7.48, 1.12, 0, 0.94);
-addChair(furnitureGroup, 6.32, 1.92, Math.PI, materials.black); addChair(furnitureGroup, 7.48, 1.92, Math.PI, materials.black);
-box(furnitureGroup, 5.87, 0.54, 2.95, 0.48, 1.04, 0.42, materials.black);
-box(furnitureGroup, 8.0, 0.54, 2.95, 0.4, 1.04, 0.42, materials.black);
+addOfficeChair(furnitureGroup,6.32,1.92); addOfficeChair(furnitureGroup,7.48,1.92);
+addPC(furnitureGroup,5.97,1.02); addPC(furnitureGroup,7.89,1.02);
+addWindowShade(furnitureGroup,6.9,.6,1.6);
+addWindowShade(furnitureGroup,9.85,.6,1.8);
 
 // 客房床与柜避开左下角内开门。
 addBed(furnitureGroup, 10.32, 2.3, 1.5, 2, 0);
 addCabinet(furnitureGroup, 8.65, 1.32, 0.45, 0.65, 2.1);
-box(furnitureGroup, 10.5, 0.74, 4.0, 1.1, 0.1, 0.48, materials.oakLight);
-addChair(furnitureGroup, 10.5, 3.5, 0, materials.fabric);
+addDesk(furnitureGroup,10.5,4.0,1.1,.48);
+addChair(furnitureGroup,10.5,3.5,Math.PI,materials.fabric);
 
 // 主卧床位在衣帽间南侧，不占主卧入口的纵向通道。
-addBed(furnitureGroup, 10.12, 10.12, 1.8, 2.05, Math.PI / 2);
-box(furnitureGroup, 10.7, 0.34, 9.0, 0.46, 0.62, 0.48, materials.walnut);
-box(furnitureGroup, 10.7, 0.34, 11.2, 0.46, 0.62, 0.48, materials.walnut);
-[9.0,11.2].forEach(z => box(furnitureGroup,10.7,0.022,z,0.38,0.044,0.4,materials.walnut));
-addCabinet(furnitureGroup, 11.1, 7.45, 0.38, 1.2, 2.2);
+addBed(furnitureGroup,10.12,10.12,1.8,2.05,-Math.PI/2);
+addNightstand(furnitureGroup,10.7,9.0);
+addNightstand(furnitureGroup,10.7,11.2);
+addCabinet(furnitureGroup,11.12,7.50,1.25,.42,2.2,materials.oakLight,-Math.PI/2);
 
-function addBathroom(parent, x, z, width, depth) {
-  const group = new THREE.Group();
-  box(group, width / 2 - 0.35, 0.4, -depth / 2 + 0.42, 0.55, 0.78, 0.45, materials.offWhite);
-  cylinder(group, -width / 2 + 0.42, 0.32, depth / 2 - 0.55, 0.26, 0.64, materials.offWhite);
-  // 淋浴玻璃留侧向入口，不再横贯整个房间。
-  box(group, width / 2 - 0.48, 1.12, depth / 2 - 0.9, 0.8, 2.1, 0.035, materials.glass);
-  group.position.set(x, 0, z); parent.add(group);
+function addBathroom(parent,x,z,width,depth) {
+  const group=new THREE.Group(); group.name="卫浴细节"; group.position.set(x,0,z); parent.add(group);
+  const sinkX=width<1.95?0:width/2-.38, sinkZ=-depth/2+.39;
+  addCabinet(group,sinkX,sinkZ,.65,.48,.75,materials.oakLight,0,true);
+  [-1,1].forEach(side=>{
+    box(group,sinkX+side*.28375,.782,sinkZ,.1225,.045,.52,materials.offWhite,{radius:.006});
+    box(group,sinkX,.782,sinkZ+side*.2075,.445,.045,.105,materials.offWhite,{radius:.006});
+  });
+  addBasin(group,sinkX,.87,sinkZ,materials.porcelain,.48,.34);
+  addFaucet(group,sinkX,.81,sinkZ-.225);
+  const mirrorCanvas=document.createElement("canvas");mirrorCanvas.width=128;mirrorCanvas.height=128;
+  const ctx=mirrorCanvas.getContext("2d"),gradient=ctx.createLinearGradient(0,0,128,128);
+  gradient.addColorStop(0,"#d7e3e5");gradient.addColorStop(.4,"#a4b6bb");gradient.addColorStop(.42,"#d2dcdb");gradient.addColorStop(1,"#8d9f9f");
+  ctx.fillStyle=gradient;ctx.fillRect(0,0,128,128);
+  const mirrorMap=new THREE.CanvasTexture(mirrorCanvas);mirrorMap.colorSpace=THREE.SRGBColorSpace;
+  box(group,sinkX,1.51,-depth/2+.085,.68,.76,.022,materials.chrome,{radius:.025});
+  const mirror=objectMesh(group,new THREE.PlaneGeometry(.644,.721),new THREE.MeshStandardMaterial({map:mirrorMap,roughness:.14,metalness:.24}),sinkX,1.51,-depth/2+.098,"bathroom-mirror");
+  addToilet(group,width<1.95?width/2-.39:-width/2+.43,depth/2-.55);
+  cylinder(group,sinkX+.245,.83,sinkZ+.07,.024,.056,materials.offWhite,20);
+  rod(group,[sinkX+.245,.866,sinkZ+.07],[sinkX+.275,.866,sinkZ+.07],.005,materials.chrome);
+  rod(group,[-width/2+.09,1.21,-.15],[-width/2+.09,1.21,.35],.012,materials.chrome);
+  box(group,-width/2+.13,.985,.13,.028,.40,.28,materials.linen,{radius:.016,name:"bath-towel"});
+  if(depth>2.5) {
+    const showerZ=depth/2-.52,showerX=width/2-.48;
+    box(group,showerX,.047,showerZ,.83,.062,.87,materials.porcelain,{radius:.025,name:"shower-tray"});
+    box(group,showerX,1.12,depth/2-.98,.80,2.1,.018,materials.glass,{radius:0});
+    rod(group,[width/2-.095,.85,depth/2-.11],[width/2-.095,2.15,depth/2-.11],.012,materials.chrome);
+    const head=cylinder(group,width/2-.095,2.18,depth/2-.20,.09,.025,materials.chrome,32);
+    head.rotation.x=.25;
+    rod(group,[width/2-.095,2.12,depth/2-.11],[width/2-.095,2.18,depth/2-.20],.012,materials.chrome);
+    ring(group,showerX,.081,showerZ,.027,.004,materials.chrome);
+  }
 }
+
 addBathroom(furnitureGroup, 7.1, 7.6, 2, 3.2);
 addBathroom(furnitureGroup, 10.45, 5.6, 1.9, 2.2);
-addCabinet(furnitureGroup, 10.98, 7.5, 0.4, 1.3, 2.2);
+
 
 // 两套阳台家具均远离2.4m推拉门入口。
-box(mergedFurniture, 8.8, 0.42, 13.17, 1.05, 0.72, 0.65, materials.fabric);
-box(mergedFurniture, 12.3, 0.43, 13.25, 1.45, 0.72, 0.48, materials.oakLight);
+const balconyBench=new THREE.Group();balconyBench.position.set(8.8,0,13.17);mergedFurniture.add(balconyBench);
+softBox(balconyBench,0,.405,0,1.05,.14,.62,materials.fabric,.055,.024,"balcony-bench-seat");
+curvedBack(balconyBench,0,.71,.255,1.05,.46,.12,materials.fabricDark,.015);
+[-.42,.42].forEach(px=>[-.22,.22].forEach(pz=>rod(balconyBench,[px,.06,pz],[px,.335,pz],.023,materials.oak)));
+addCabinet(mergedFurniture,12.3,13.25,1.45,.48,.72);
 addPlant(mergedFurniture, 13.2, 12.6, 0.9);
 // 独立多功能房使用普通墙体和玻璃推拉门，门框上方补足过梁。
 box(glassStructure, 9.75, (CEILING_HEIGHT + DOOR_FRAME_TOP) / 2, 11.9, 2.4 + DOOR_FRAME_WIDTH * 2, CEILING_HEIGHT - DOOR_FRAME_TOP, WALL_THICKNESS, materials.wall);
-box(glassFurniture, 8.95, 0.75, 13.25, 1.45, 0.1, 0.52, materials.oakLight);
-addMonitor(glassFurniture, 8.95, 13.05, 0, 0.78); addChair(glassFurniture, 8.95, 12.6, 0);
+addDesk(glassFurniture,8.95,13.25,1.45,.52);
+addMonitor(glassFurniture,8.95,13.05,0,.78); addOfficeChair(glassFurniture,8.95,12.6,Math.PI);
 cylinder(glassFurniture, 12.55, 0.64, 12.9, 0.47, 0.08, materials.oakLight, 40);
 cylinder(glassFurniture, 12.55, 0.31, 12.9, 0.07, 0.62, materials.black, 18);
 addChair(glassFurniture, 11.9, 12.9, Math.PI / 2); addPlant(glassFurniture, 13.25, 12.25, 0.7);
