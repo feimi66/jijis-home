@@ -974,7 +974,7 @@ a:focus-visible {
     left: 0;
     height: calc(68px + env(safe-area-inset-bottom));
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--line);
     background: rgba(250, 248, 243, 0.94);
@@ -1160,3 +1160,25 @@ a:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* 门的操作同时支持模型点击、键盘和手机面板。 */
+.plan-view-button { width:100%; min-height:40px; margin-top:10px; border:1px solid var(--line); border-radius:12px; background:#fffaf2; color:var(--accent-dark); cursor:pointer; font-size:11px; }
+.door-list { display:grid; gap:7px; }
+.door-button { display:flex; justify-content:space-between; align-items:center; gap:8px; min-height:48px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; background:rgba(255,255,255,.65); cursor:pointer; text-align:left; }
+.door-button span { font-size:11px; font-weight:650; }
+.door-button small { font-size:9px; color:var(--muted); white-space:nowrap; }
+.door-button[aria-pressed="true"] { border-color:#93aa86; background:#edf2e9; }
+.door-button:disabled { opacity:.45; cursor:default; }
+.door-bulk-actions { display:flex; gap:8px; margin-bottom:10px; }
+.door-bulk-actions button { flex:1; min-height:36px; border:1px solid var(--line); border-radius:10px; background:#fffaf2; cursor:pointer; font-size:10px; }
+.door-action { position:absolute; z-index:10; bottom:25px; right:20px; max-width:240px; min-height:48px; padding:10px 16px; border:1px solid rgba(90,108,82,.25); border-radius:14px; background:#faf7ee; box-shadow:0 5px 25px #0002; color:#42503f; font-size:12px; font-weight:700; cursor:pointer; }
+.door-action[hidden] { display:none; }
+@media(max-width:760px) {
+  .door-action { right:12px; bottom:20px; max-width:205px; }
+  #sheetContent .door-list { padding-bottom:4px; }
+  #sheetContent .door-button { min-height:54px; }
+  #sheetContent .primary-button { margin:0 0 14px; }
+  .look-note { display:none; }
+}
+
+.stage.is-plan .scheme-card { display:none; }
