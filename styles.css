@@ -1235,3 +1235,11 @@ a:focus-visible {
 @media(max-height:500px) and (max-width:760px) {
   .view-settings { width:180px; }
 }
+
+/* 北向箭头跟随真实镜头；按钮本身不旋转，触控命中区保持稳定。 */
+.compass { padding:0; cursor:pointer; touch-action:manipulation; }
+.compass:hover { background:#fffaf0; }
+.compass:focus-visible { outline:3px solid #b18557; outline-offset:3px; }
+.compass-rose { position:relative; display:block; width:43px; height:43px; transform-origin:50% 50%; pointer-events:none; }
+.compass-rose > span { position:absolute; top:23px; left:0; width:100%; line-height:12px; text-align:center; }
+.compass .compass-rose i { left:18px; top:5px; width:7px; height:17px; }

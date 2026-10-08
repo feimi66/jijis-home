@@ -48,10 +48,9 @@
             <span id="viewStatus">全屋鸟瞰</span>
           </div>
 
-          <div class="compass" aria-label="方向指示">
-            <span>N</span>
-            <i></i>
-          </div>
+          <button class="compass" id="northUp" type="button" aria-label="北朝上：旋转房屋视角" title="点击恢复北朝上">
+            <span id="compassRose" class="compass-rose" aria-hidden="true"><span>N</span><i></i></span>
+          </button>
 
           <div class="scheme-card" aria-label="阳台B方案选择">
             <div class="scheme-heading">
@@ -75,8 +74,8 @@
             <div class="speed-range"><span>慢 · 0.20×</span><span>快 · 1.50×</span></div>
           </details>
 
-          <div id="viewPanControls" class="view-pan-controls" role="group" aria-label="移动整屋视图">
-            <span>移动整屋视图</span>
+          <div id="viewPanControls" class="view-pan-controls" role="group" aria-label="按当前视角平移">
+            <span>按当前视角平移</span>
             <div class="move-pad">
               <button type="button" data-pan="up" aria-label="整屋向上移动">▲</button>
               <button type="button" data-pan="left" aria-label="整屋向左移动">◀</button>
@@ -206,7 +205,7 @@
           <span class="dialog-kicker">操作指南</span>
           <h2 id="helpTitle">自在地逛逛吉吉的家</h2>
           <div class="help-grid">
-            <div><b>01</b><strong>鸟瞰模式</strong><p>拖动画面旋转，滚轮缩放鼠标所指位置，双指可缩放；电脑可按住左下方向键移动整屋视图；视角滑动速度可调。点击房间按钮快速定位；点击门扇或电视柜抽屉可开关。</p></div>
+            <div><b>01</b><strong>鸟瞰模式</strong><p>拖动画面旋转，滚轮缩放鼠标所指位置，双指可缩放；电脑可按住左下方向键，按当前屏幕方向平移；点击右上指南针恢复北朝上；视角滑动速度可调。点击房间按钮快速定位；点击门扇或电视柜抽屉可开关。</p></div>
             <div><b>02</b><strong>第一人称</strong><p>电脑使用WASD或方向键移动，手机使用左下方向键；移动速度可用滑杆调整并自动记住。拖动画面转向，左上角可调整视角滑动速度。靠近门后点击开门按钮，电脑也可按E。</p></div>
             <div><b>03</b><strong>方案切换</strong><p>比较阳台并入主卧与独立多功能房两种布置；独立方案的推拉门可开关。</p></div>
           </div>
@@ -485,6 +484,7 @@ const materials = {
 };
 
 
+materials.warmLED=new THREE.MeshStandardMaterial({color:0xffe2b0,emissive:0xffcf8b,emissiveIntensity:.65,roughness:.6});
 materials.floorStone.color.set(0xffffff);
 materials.floorWood.color.set(0xffffff);
 materials.floorBath.color.set(0xf3f3ee);
@@ -510,6 +510,8 @@ scene.add(home);
 
 const floorAreas = [];
 const wallSegments = [];
+const wallRuns=[];
+const wallCornerCaps=[];
 const structuralWallBounds=[];
 const doorJambBounds=[];
 const skirtingVariants=[];
@@ -566,11 +568,13 @@ function floor(room, x, z, width, depth, material) {
 }
 
 function wallH(x1, x2, z, height = CEILING_HEIGHT, material = materials.wall, y = height / 2) {
+  wallRuns.push({axis:"h",x1,x2,z,y1:y-height/2,y2:y+height/2,material});
   if (y - height / 2 < 0.25) wallSegments.push({ x1, z1: z, x2, z2: z });
   return box(wallsGroup, (x1 + x2) / 2, y, z, x2 - x1, height, WALL_THICKNESS, material);
 }
 
 function wallV(x, z1, z2, height = CEILING_HEIGHT, material = materials.wall, y = height / 2) {
+  wallRuns.push({axis:"v",x,z1,z2,y1:y-height/2,y2:y+height/2,material});
   if (y - height / 2 < 0.25) wallSegments.push({ x1: x, z1, x2: x, z2 });
   return box(wallsGroup, x, y, (z1 + z2) / 2, WALL_THICKNESS, height, z2 - z1, material);
 }
@@ -891,7 +895,39 @@ function unifyBoxSurfaces(parent,meshes,material,name,uvScale=8,{subtractBounds=
   result.userData.unionBounds=bounds;parent.add(result);return result;
 }
 
+// 每个实际垂直接点补齐完整墙厚。高度取源墙交集，门窗洞不会被填上。
+function buildWallCornerCaps(runs,material=materials.wall){
+  const eps=1e-6,half=WALL_THICKNESS/2,nodes=new Map();
+  const horizontal=runs.filter(r=>r.axis==="h"&&r.material===material);
+  const vertical=runs.filter(r=>r.axis==="v"&&r.material===material);
+  for(const h of horizontal)for(const v of vertical){
+    if(v.x<h.x1-eps||v.x>h.x2+eps||h.z<v.z1-eps||h.z>v.z2+eps)continue;
+    if(Math.min(h.y2,v.y2)-Math.max(h.y1,v.y1)<=eps)continue;
+    const key=v.x.toFixed(6)+","+h.z.toFixed(6);
+    let node=nodes.get(key);
+    if(!node)nodes.set(key,node={x:v.x,z:h.z,h:new Set(),v:new Set()});
+    node.h.add(h);node.v.add(v);
+  }
+  const caps=[];
+  for(const node of nodes.values()){
+    const connected=[...node.h,...node.v];
+    const heights=[...new Set(connected.flatMap(r=>[Number(r.y1.toFixed(6)),Number(r.y2.toFixed(6))]))].sort((a,b)=>a-b);
+    for(let k=0;k<heights.length-1;k++){
+      const y1=heights[k],y2=heights[k+1],mid=(y1+y2)/2;
+      const h=[...node.h].filter(r=>r.y1<mid&&r.y2>mid),v=[...node.v].filter(r=>r.y1<mid&&r.y2>mid);
+      if(y2-y1<=eps||!h.length||!v.length)continue;
+      const arms=new Set();
+      h.forEach(r=>{if(r.x1<node.x-eps)arms.add("west");if(r.x2>node.x+eps)arms.add("east");});
+      v.forEach(r=>{if(r.z1<node.z-eps)arms.add("north");if(r.z2>node.z+eps)arms.add("south");});
+      caps.push({x:node.x,z:node.z,y1,y2,kind:arms.size===2?"L":arms.size===3?"T":"X",arms:[...arms],material,
+        bounds:[[node.x-half,y1,node.z-half],[node.x+half,y2,node.z+half]]});
+    }
+  }
+  return caps;
+}
 function finishStructure(){
+  wallCornerCaps.push(...buildWallCornerCaps(wallRuns));
+  wallCornerCaps.forEach(c=>box(wallsGroup,c.x,(c.y1+c.y2)/2,c.z,WALL_THICKNESS,c.y2-c.y1,WALL_THICKNESS,c.material,{radius:0}));
   const wallMeshes=wallsGroup.children.filter(m=>m.isMesh&&m.material===materials.wall);
   structuralWallBounds.push(...canonicalBounds(wallMeshes.map(meshBoxBounds)));
   unifyBoxSurfaces(wallsGroup,wallMeshes,materials.wall,"continuous-walls");
@@ -1061,11 +1097,11 @@ function addWasher(parent,x,z) {
   box(group,.185,.47,.346,.018,.115,.024,materials.offWhite,{radius:.008});
   return group;
 }
-function addNightstand(parent,x,z,depth=.48) {
-  const group=new THREE.Group();group.position.set(x,0,z);group.name="床头柜";parent.add(group);
-  box(group,0,.31,0,.46,.53,depth,materials.walnut,{radius:.018});
+function addNightstand(parent,x,z,depth=.40) {
+  const group=new THREE.Group();group.position.set(x,0,z);group.rotation.y=-Math.PI/2;group.name="床头柜";parent.add(group);
+  box(group,0,.31,0,.42,.53,depth,materials.oakLight,{radius:.018});
   for(const y of [.19,.44]) {
-    box(group,0,y,depth/2+.006,.433,.229,.019,materials.oakLight,{radius:.006});
+    box(group,0,y,depth/2+.006,.393,.229,.019,materials.oakLight,{radius:.006});
     rod(group,[-.08,y+.04,depth/2+.027],[.08,y+.04,depth/2+.027],.005,materials.chrome);
   }
   for(const a of [-1,1])for(const b of [-1,1])rod(group,[a*.16,.0,b*.17],[a*.16,.075,b*.17],.018,materials.walnut);
@@ -1367,7 +1403,7 @@ addWindowShade(furnitureGroup,6.9,.6,1.6);
 addWindowShade(furnitureGroup,9.85,.6,1.8);
 
 // 客房床与柜避开左下角内开门。
-addBed(furnitureGroup, 10.32, 2.3, 1.5, 2, 0);
+addBed(furnitureGroup, 10.32, 1.93, 1.5, 2, 0);
 addCabinet(furnitureGroup,8.66,1.32,.50,.58,2.1);
 addDesk(furnitureGroup,10.5,4.05,1.1,.60);
 addChair(furnitureGroup,10.5,3.5,Math.PI,materials.fabric);
@@ -1376,7 +1412,7 @@ addChair(furnitureGroup,10.5,3.5,Math.PI,materials.fabric);
 addBed(furnitureGroup,10.12,10.42,1.8,2.0,-Math.PI/2);
 addWardrobe(furnitureGroup,8.45,8.94,1.0,.58,2.364,Math.PI/2);
 addNightstand(furnitureGroup,10.92,9.24);
-addNightstand(furnitureGroup,10.92,11.57,.42);
+addNightstand(furnitureGroup,10.92,11.59);
 addCabinet(furnitureGroup,11.035,7.50,1.25,.58,2.2,materials.oakLight,-Math.PI/2);
 
 function addBathroom(parent,x,z,width,depth) {
@@ -1395,6 +1431,8 @@ function addBathroom(parent,x,z,width,depth) {
   ctx.fillStyle=gradient;ctx.fillRect(0,0,128,128);
   const mirrorMap=new THREE.CanvasTexture(mirrorCanvas);mirrorMap.colorSpace=THREE.SRGBColorSpace;
   box(group,sinkX,1.51,-depth/2+.085,.68,.76,.022,materials.chrome,{radius:.025});
+  box(group,sinkX,1.93,-depth/2+.11,.60,.032,.046,materials.offWhite,{radius:.008,name:"镜前灯"});
+  box(group,sinkX,1.915,-depth/2+.116,.54,.006,.040,materials.warmLED,{radius:.002});
   const mirror=objectMesh(group,new THREE.PlaneGeometry(.644,.721),new THREE.MeshStandardMaterial({map:mirrorMap,roughness:.14,metalness:.24}),sinkX,1.51,-depth/2+.098,"bathroom-mirror");
   addToilet(group,width<1.95?width/2-.39:-width/2+.43,depth/2-.55);
   cylinder(group,sinkX+.245,.83,sinkZ+.07,.024,.056,materials.offWhite,20);
@@ -1416,6 +1454,43 @@ function addBathroom(parent,x,z,width,depth) {
 addBathroom(furnitureGroup, 7.1, 7.6, 2, 3.2);
 addBathroom(furnitureGroup, 10.45, 5.6, 1.9, 2.2);
 
+
+// 固定柜、照明和设备连接遵循同一套浅木／暖白饰面，保留所有门口和行走路线。
+function addWallLight(parent,x,y,z,rotation=0){
+  const group=new THREE.Group();group.name="床头阅读壁灯";group.position.set(x,y,z);group.rotation.y=rotation;parent.add(group);
+  box(group,0,0,0,.075,.14,.018,materials.black,{radius:.01});
+  rod(group,[0,-.01,.02],[0,-.055,.105],.012,materials.black);
+  const shade=objectMesh(group,new THREE.CylinderGeometry(.037,.052,.08,24),materials.offWhite,0,-.075,.115);
+  shade.rotation.x=-.3;
+  const diffuser=cylinder(group,0,-.115,.128,.045,.005,materials.warmLED,24);diffuser.castShadow=false;
+}
+function addEntryStorage(){
+  const group=new THREE.Group();group.name="玄关薄鞋柜";group.position.set(1.20,0,2.795);group.rotation.y=Math.PI;furnitureGroup.add(group);
+  group.userData.nominalSize=[.52,.18,.78];
+  box(group,0,.49,0,.52,.78,.18,materials.offWhite,{radius:.012});
+  for(const y of [.296,.687]){
+    box(group,0,y,.096,.5,.372,.014,materials.offWhite,{radius:.008});
+    box(group,0,y+.135,.109,.20,.008,.008,materials.black,{radius:.003});
+  }
+  box(group,0,.89,0,.54,.02,.20,materials.oakLight,{radius:.006});
+  // 镜子和搁板贴着实体短墙，朝向玄关。
+  box(group,0,1.40,-.074,.43,.76,.018,materials.oakLight,{radius:.035});
+  box(group,0,1.40,-.063,.397,.725,.004,materials.chrome,{radius:.025});
+  const tray=objectMesh(group,new THREE.CylinderGeometry(.063,.053,.009,32),materials.fabricDark,.15,.91,.01);
+  tray.scale.z=.6;
+}
+addEntryStorage();
+addWallLight(furnitureGroup,11.325,1.35,9.24,-Math.PI/2);
+addWallLight(furnitureGroup,11.325,1.35,11.59,-Math.PI/2);
+const bedWallPanel=box(furnitureGroup,11.325,1.04,10.42,.026,1.30,2.96,materials.oakLight,{radius:.007,name:"主卧连续床头饰面"});
+// 柜下灯和抽油烟机工作灯；使用发光材质，避免增加手机端阴影灯负担。
+box(furnitureGroup,.27,1.584,.29,.26,.007,.30,materials.warmLED,{radius:.003,name:"厨房柜下照明"});
+box(furnitureGroup,.39,1.648,1.06,.06,.008,.40,materials.warmLED,{radius:.003,name:"灶台工作照明"});
+box(furnitureGroup,6.9,.64,.86,1.86,.08,.11,materials.black,{radius:.01,name:"书桌理线槽"});
+// 洗衣机的进排水软管位于机身后侧，接口接在北墙。
+rod(furnitureGroup,[3.23,.70,.13],[3.23,.70,.067],.015,materials.chrome);
+rod(furnitureGroup,[3.23,.70,.13],[3.23,.46,.135],.014,materials.offWhite);
+rod(furnitureGroup,[3.3,.32,.13],[3.3,.32,.075],.018,materials.fabricDark);
 
 // 两套阳台家具均远离2.4m推拉门入口。
 const balconyBench=new THREE.Group();balconyBench.position.set(8.8,0,13.17);mergedFurniture.add(balconyBench);
@@ -1821,9 +1896,13 @@ function updateViewPan(delta){
   camera.updateMatrixWorld();
   const distance=camera.position.distanceTo(controls.target);
   const step=2*distance*Math.tan(camera.fov*Math.PI/360)/Math.max(1,stage.clientHeight)*160*delta/length;
+  // 以当前屏幕右方及地面向屏幕上方的投影移动，始终保持地面焦点高度。
   const right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0);
-  const up=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,1);
-  const movement=right.multiplyScalar(-x*step).add(up.multiplyScalar(-y*step));
+  right.y=0;right.normalize();
+  const forward=new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0),right).normalize();
+  const screenUp=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,1);
+  const verticalProjection=Math.max(.12,forward.dot(screenUp));
+  const movement=right.multiplyScalar(-x*step).add(forward.multiplyScalar(-y*step/verticalProjection));
   camera.position.add(movement);controls.target.add(movement);
   controls.update();
 }
@@ -1864,6 +1943,9 @@ function doorSegments(door) {
 function canStand(x, z) {
   if (!floorAreas.some(area => x >= area.x1 - 1e-6 && x <= area.x2 + 1e-6 && z >= area.z1 - 1e-6 && z <= area.z2 + 1e-6)) return false;
   if (wallSegments.some(segment => segmentDistance(x, z, segment) < WALK_RADIUS + WALL_THICKNESS / 2)) return false;
+  if(wallCornerCaps.some(c=>c.y1<.25&&Math.hypot(
+    Math.max(c.bounds[0][0]-x,0,x-c.bounds[1][0]),
+    Math.max(c.bounds[0][2]-z,0,z-c.bounds[1][2]))<WALK_RADIUS))return false;
   return !doors.some(door => doorSegments(door).some(segment => segmentDistance(x, z, segment) < WALK_RADIUS + 0.025));
 }
 
@@ -1942,6 +2024,7 @@ function bindUI() {
       if(event.detail===0){viewPanPressed.add(direction);updateViewPan(.12);stop();}
     });
   });
+  $("#northUp").addEventListener("click",faceNorth);
   $("#planView").addEventListener("click", showPlan);
   $("#interactDoor").addEventListener("click", () => { const door = nearestDoor(); if (door) toggleDoor(door.id); });
   $("#openAllDoors").addEventListener("click", () => { doors.forEach(door => { door.open = true; }); updateDoorButtons(); showToast("所有门已打开"); });
@@ -2100,11 +2183,43 @@ function resize() {
 
 window.addEventListener("resize", resize);
 
+function updateCompass(){
+  const indicator=$("#compassRose");
+  let angle;
+  if(state.mode==="walk")angle=state.walkYaw;
+  else{
+    camera.updateMatrixWorld();
+    const north=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion.clone().invert());
+    angle=Math.atan2(north.x,north.y);
+  }
+  indicator.style.transform="rotate("+angle+"rad)";
+  $("#northUp").dataset.bearing=(angle*180/Math.PI).toFixed(2);
+}
+function faceNorth(){
+  clearDirectionButtons();
+  state.cameraTween=null;
+  if(state.mode==="walk"){
+    state.walkYaw=0;updateWalkRotation();updateCompass();showToast("已朝向北方");return;
+  }
+  // 清掉拖拽阻尼，再用球面角度旋转，保留当前焦点、俯仰和缩放。
+  const damping=controls.enableDamping;controls.enableDamping=false;controls.update();controls.enableDamping=damping;
+  const offset=camera.position.clone().sub(controls.target);
+  const spherical=new THREE.Spherical().setFromVector3(offset);
+  state.cameraTween={kind:"north",start:performance.now(),duration:550,
+    target:controls.target.clone(),radius:spherical.radius,phi:spherical.phi,theta:spherical.theta};
+  showToast("北朝上");
+}
 function updateCameraTween(now) {
   const tween = state.cameraTween;
   if (!tween) return;
   const progress = Math.min(1, (now - tween.start) / tween.duration);
   const eased = 1 - Math.pow(1 - progress, 3);
+  if(tween.kind==="north"){
+    controls.target.copy(tween.target);
+    camera.position.copy(tween.target).add(new THREE.Vector3().setFromSphericalCoords(tween.radius,tween.phi,tween.theta*(1-eased)));
+    if(progress>=1)state.cameraTween=null;
+    return;
+  }
   camera.position.lerpVectors(tween.fromPosition, tween.toPosition, eased);
   controls.target.lerpVectors(tween.fromTarget, tween.toTarget, eased);
   if (progress >= 1) state.cameraTween = null;
@@ -2121,6 +2236,7 @@ function animate(now) {
   } else {
     updateWalk(delta);
   }
+  updateCompass();
   updateDoors(delta);
   updateDrawers(delta);
   updateDoorAction();
@@ -2173,6 +2289,7 @@ window.JijiHome = {
   setWalkSpeed,
   setViewSpeed,
   showPlan,
+  faceNorth,
 };
 
 </script>
