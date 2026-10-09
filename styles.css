@@ -1243,3 +1243,11 @@ a:focus-visible {
 .compass-rose { position:relative; display:block; width:43px; height:43px; transform-origin:50% 50%; pointer-events:none; }
 .compass-rose > span { position:absolute; top:23px; left:0; width:100%; line-height:12px; text-align:center; }
 .compass .compass-rose i { left:18px; top:5px; width:7px; height:17px; }
+
+.context-quick-toggle { position:absolute;top:120px;left:20px;z-index:7;border:1px solid #d7d1c8;border-radius:999px;background:rgba(255,253,248,.9);padding:8px 12px;color:#5b554b;font-size:11px;cursor:pointer;box-shadow:0 5px 15px rgba(55,45,30,.05); }
+.context-quick-toggle[aria-pressed="false"] { color:#8a623e;background:#fff9ef; }
+.scope-actions { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px; }
+.scope-actions button { padding:12px 8px;border:1px solid #ddd6ca;border-radius:12px;background:#fffaf2;color:#655d50; }
+.scope-actions button:last-child { grid-column:1/-1; }
+.mode-section .plan-view-button + .plan-view-button { margin-top:8px; }
+@media(max-width:760px) { .context-quick-toggle { top:104px;left:12px;padding:7px 11px; } .view-settings[open] { z-index:12; } }
