@@ -1250,28 +1250,99 @@ function addWardrobe(parent,x,z,width=1,depth=.58,height=2.364,rotation=0){
 }
 function addExteriorDryingRack(parent,x){
   const group=new THREE.Group();group.name="阳台A外侧晾衣架";group.position.set(x,0,0);parent.add(group);
-  group.userData.nominalSize=[1.58,.62,1.92];
+  const railHeight=1.98,outerRailZ=-.67;
+  group.userData.nominalSize=[1.58,.62,railHeight];
+  // 两侧固定在窗旁实墙，支座贴外墙面；室内洗衣、取水和开门区域保持空出。
   for(const side of [-1,1]){
-    box(group,side*.70,1.74,-.0725,.055,.38,.025,materials.chrome,{radius:.005,name:"drying-wall-mount"});
-    rod(group,[side*.70,1.89,-.085],[side*.70,1.89,-.69],.012,materials.chrome);
-    rod(group,[side*.70,1.59,-.085],[side*.70,1.89,-.58],.010,materials.chrome);
+    box(group,side*.70,1.79,-.081,.05,.40,.042,materials.chrome,{radius:.004,name:"drying-wall-mount"});
+    for(const y of [1.64,1.94]){
+      const screw=objectMesh(group,new THREE.CylinderGeometry(.009,.009,.006,12),materials.chrome,side*.70,y,-.105,"drying-mount-screw");screw.rotation.x=Math.PI/2;
+    }
+    rod(group,[side*.70,railHeight,-.108],[side*.70,railHeight,-.69],.012,materials.chrome).name="drying-support-arm";
+    rod(group,[side*.70,1.60,-.108],[side*.70,railHeight,-.60],.010,materials.chrome).name="drying-support-brace";
   }
-  for(const z of [-.24,-.45,-.67])rod(group,[-.78,1.89,z],[.78,1.89,z],.010,materials.chrome);
-  const clothes=[[-.30,-.67,materials.linen],[.28,-.67,materials.duvet]];
-  for(const [px,pz,source] of clothes){
-    const hanger=new THREE.Group();hanger.position.set(px,1.85,pz);group.add(hanger);
-    const hookPath=new THREE.CatmullRomCurve3([new THREE.Vector3(-.012,.025,0),new THREE.Vector3(-.017,.065,0),new THREE.Vector3(.023,.072,0),new THREE.Vector3(.032,.044,0),new THREE.Vector3(0,.020,0)]);
-    objectMesh(hanger,new THREE.TubeGeometry(hookPath,14,.0035,6,false),materials.chrome);
-    rod(hanger,[0,.012,0],[-.17,-.11,0],.004,materials.chrome);
-    rod(hanger,[-.17,-.11,0],[.17,-.11,0],.004,materials.chrome);
-    rod(hanger,[.17,-.11,0],[0,.012,0],.004,materials.chrome);
-    const shape=new THREE.Shape();
-    [[-.055,-.04],[-.135,-.065],[-.215,-.13],[-.17,-.22],[-.13,-.18],[-.13,-.47],[.13,-.47],[.13,-.18],[.17,-.22],[.215,-.13],[.135,-.065],[.055,-.04],[.035,-.085],[-.035,-.085]].forEach(([sx,sy],i)=>i?shape.lineTo(sx,sy):shape.moveTo(sx,sy));
-    shape.closePath();const geometry=new THREE.ShapeGeometry(shape,8),p=geometry.attributes.position;
-    for(let i=0;i<p.count;i++)p.setZ(i,Math.sin(p.getX(i)*27)*.012+Math.sin(p.getY(i)*13)*.010);
-    geometry.computeVertexNormals();const material=source.clone();material.side=THREE.DoubleSide;
-    objectMesh(hanger,geometry,material,0,0,.008,"drying-shirt");
+  for(const z of [-.20,-.35,outerRailZ]){
+    const rail=rod(group,[-.78,railHeight,z],[.78,railHeight,z],.010,materials.chrome);rail.name="drying-rail";
+    for(const side of [-1,1]){const cap=objectMesh(group,new THREE.SphereGeometry(.012,12,8),materials.chrome,side*.78,railHeight,z,"drying-rail-cap");cap.scale.x=.55;}
   }
+
+  // 将布面细分后生成柔和褶皱，正反两层组成薄衣物，领口、袖口和裤腿保留真实轮廓。
+  function fabricFold(px,py){return .010*Math.sin(px*26+py*3)+.006*Math.sin(py*19+px*7);}
+  function addFabric(owner,points,source,name){
+    const shape=new THREE.Shape();points.forEach(([px,py],i)=>i?shape.lineTo(px,py):shape.moveTo(px,py));shape.closePath();
+    const base=new THREE.ShapeGeometry(shape),attribute=base.attributes.position,indices=base.index;
+    const vertices=[],normals=[],uvs=[];
+    function put(px,py,side){
+      const dzx=.26*Math.cos(px*26+py*3)+.042*Math.cos(py*19+px*7);
+      const dzy=.030*Math.cos(px*26+py*3)+.114*Math.cos(py*19+px*7);
+      const normal=new THREE.Vector3(-dzx,-dzy,1).normalize().multiplyScalar(side);
+      vertices.push(px,py,fabricFold(px,py)+side*.010);normals.push(normal.x,normal.y,normal.z);uvs.push(px*2+.5,-py*2);
+    }
+    for(let t=0;t<indices.count;t+=3){
+      const triangle=[0,1,2].map(k=>new THREE.Vector2(attribute.getX(indices.getX(t+k)),attribute.getY(indices.getX(t+k))));
+      const steps=Math.max(2,Math.ceil(Math.max(triangle[0].distanceTo(triangle[1]),triangle[1].distanceTo(triangle[2]),triangle[2].distanceTo(triangle[0]))/.065));
+      const sample=(i,j)=>triangle[0].clone().addScaledVector(triangle[1].clone().sub(triangle[0]),i/steps).addScaledVector(triangle[2].clone().sub(triangle[0]),j/steps);
+      function face(a,b,c){for(const side of [1,-1])for(const p of side>0?[a,b,c]:[c,b,a])put(p.x,p.y,side);}
+      for(let i=0;i<steps;i++)for(let j=0;j<steps-i;j++){
+        face(sample(i,j),sample(i+1,j),sample(i,j+1));
+        if(j<steps-i-1)face(sample(i+1,j),sample(i+1,j+1),sample(i,j+1));
+      }
+    }
+    base.dispose();const geometry=new THREE.BufferGeometry();
+    geometry.setAttribute("position",new THREE.Float32BufferAttribute(vertices,3));geometry.setAttribute("normal",new THREE.Float32BufferAttribute(normals,3));geometry.setAttribute("uv",new THREE.Float32BufferAttribute(uvs,2));
+    const material=source.clone();material.side=THREE.DoubleSide;
+    return objectMesh(owner,geometry,material,0,0,0,name);
+  }
+  function seam(owner,points,source){
+    const path=new THREE.CatmullRomCurve3(points.map(([px,py])=>new THREE.Vector3(px,py,fabricFold(px,py)+.0115)));
+    const material=source.clone();material.color.multiplyScalar(.86);
+    return objectMesh(owner,new THREE.TubeGeometry(path,24,.0015,5,false),material,0,0,0,"laundry-seam");
+  }
+  function hanger(owner){
+    const hookPath=new THREE.CatmullRomCurve3([[0,.012,0],[-.012,.025,0],[-.026,.064,0],[-.018,.087,0],[.006,.092,0],[.026,.080,0],[.022,.058,0]].map(p=>new THREE.Vector3(...p)));
+    objectMesh(owner,new THREE.TubeGeometry(hookPath,24,.003,7,false),materials.chrome,0,0,0,"laundry-hanger-hook");
+    rod(owner,[0,.012,0],[-.20,-.135,0],.004,materials.offWhite).name="laundry-hanger";
+    rod(owner,[-.20,-.135,0],[.20,-.135,0],.004,materials.offWhite).name="laundry-hanger";
+    rod(owner,[.20,-.135,0],[0,.012,0],.004,materials.offWhite).name="laundry-hanger";
+  }
+  function clothesPeg(owner,px,py,pz){
+    const peg=new THREE.Group();peg.name="laundry-wind-clip";peg.position.set(px,py,pz);owner.add(peg);
+    for(const side of [-1,1])box(peg,0,0,side*.005,.012,.038,.004,materials.oakLight,{radius:.002});
+    const spring=objectMesh(peg,new THREE.TorusGeometry(.006,.0015,6,12),materials.chrome,0,.002,0);spring.rotation.y=Math.PI/2;
+  }
+  const cream=materials.linen.clone(),blue=materials.linen.clone(),trouser=materials.fabricDark.clone();
+  cream.color.set(0xf4eee2);blue.color.set(0xb9cbd1);trouser.color.set(0x7c8689);
+  const shirtOutline=[[-.072,-.020],[-.160,-.070],[-.275,-.170],[-.230,-.285],[-.177,-.240],[-.175,-.610],[-.06,-.636],[.07,-.642],[.175,-.621],[.175,-.240],[.230,-.285],[.275,-.170],[.160,-.070],[.072,-.020],[.045,-.074],[0,-.091],[-.045,-.074]];
+  for(const [px,source,lengthScale,name] of [[-.50,cream,1,"laundry-shirt-cream"],[0,blue,1.045,"laundry-shirt-blue"]]){
+    const shirt=new THREE.Group();shirt.name=name;shirt.position.set(px,railHeight-.079,outerRailZ);shirt.rotation.y=Math.PI/2;group.add(shirt);
+    hanger(shirt);const points=shirtOutline.map(([a,b])=>[a,b*lengthScale]);addFabric(shirt,points,source,"laundry-shirt-fabric");
+    seam(shirt,[[-.072,-.020],[-.045,-.074],[0,-.091],[.045,-.074],[.072,-.020]].map(([a,b])=>[a,b*lengthScale]),source);
+    seam(shirt,[[-.174,-.611],[-.06,-.626],[.07,-.632],[.174,-.621]].map(([a,b])=>[a,b*lengthScale]),source);
+  }
+  const pants=new THREE.Group();pants.name="laundry-trousers";pants.position.set(.50,railHeight-.079,outerRailZ);pants.rotation.y=Math.PI/2;group.add(pants);hanger(pants);
+  const pantsOutline=[[-.155,-.127],[.155,-.127],[.176,-.27],[.157,-1.025],[.023,-1.025],[0,-.40],[-.023,-1.025],[-.157,-1.025],[-.176,-.27]];
+  addFabric(pants,pantsOutline,trouser,"laundry-trouser-fabric");
+  seam(pants,[[-.15,-.15],[0,-.151],[.15,-.15]],trouser);
+  seam(pants,[[-.09,-.28],[-.078,-.67],[-.081,-1.013]],trouser);seam(pants,[[.09,-.28],[.078,-.67],[.081,-1.013]],trouser);
+  for(const side of [-1,1])clothesPeg(pants,side*.14,-.130,.014);
+
+  // 小毛巾跨过中杆对折，顶面包住横杆；内杆留空，衣物不挤在同一平面。
+  const towel=new THREE.Group();towel.name="laundry-towel";towel.position.set(-.23,0,-.35);group.add(towel);
+  const positions=[],uvs=[],indices=[];const columns=18,rows=36;
+  for(let row=0;row<=rows;row++)for(let column=0;column<=columns;column++){
+    const t=row/rows,px=(column/columns-.5)*.30;let py,pz;
+    if(t<=.45){py=railHeight-.43+.43*t/.45;pz=.014;}
+    else if(t<.55){const a=Math.PI*(t-.45)/.10;py=railHeight+Math.sin(a)*.014;pz=Math.cos(a)*.014;}
+    else{py=railHeight-.31*(t-.55)/.45;pz=-.014;}
+    const fall=Math.max(0,(railHeight-py)/.43);
+    positions.push(px,py-.006*Math.sin(px*35)*fall,pz+.008*Math.sin(px*33)*fall);uvs.push(column/columns,t);
+  }
+  for(let row=0;row<rows;row++)for(let column=0;column<columns;column++){
+    const a=row*(columns+1)+column,b=a+1,c=a+columns+1,d=c+1;indices.push(a,c,b,b,c,d);
+  }
+  const towelGeometry=new THREE.BufferGeometry();towelGeometry.setAttribute("position",new THREE.Float32BufferAttribute(positions,3));towelGeometry.setAttribute("uv",new THREE.Float32BufferAttribute(uvs,2));towelGeometry.setIndex(indices);towelGeometry.computeVertexNormals();
+  const towelMaterial=cream.clone();towelMaterial.side=THREE.DoubleSide;objectMesh(towel,towelGeometry,towelMaterial,0,0,0,"laundry-towel-fabric");
+  for(const side of [-1,1])clothesPeg(towel,side*.105,railHeight+.018,.006);
   return group;
 }
 
@@ -1619,7 +1690,7 @@ const roomViews={
   suite:{label:"客厅与主卧连接区",target:[8.7,.5,7.1],offset:[-3.5,6,5],walk:[8.3,1.62,7.5],yaw:-Math.PI/2},
   master:{label:"主卧与南阳台",target:[10.8,.7,10.8],offset:[-6,10.4,7],walk:[9.6,1.62,10.2],yaw:-Math.PI/2},
   kitchen:{label:"厨房",target:[1.8,.7,.9],offset:[4.5,7,5],walk:[2.15,1.62,1.15],yaw:Math.PI/2},
-  "balcony-a":{label:"生活阳台",target:[4.85,.6,.9],offset:[4.1,6.5,5.2],walk:[4.9,1.62,1.3],yaw:0},
+  "balcony-a":{label:"生活阳台",target:[4.85,1.0,.15],offset:[2.95,3.8,-4.25],walk:[4.9,1.62,1.3],yaw:0},
   "bath-a":{label:"主卫",target:[8,.6,9.1],offset:[-4.6,7.5,5.5],walk:[8.25,1.62,8.75],yaw:Math.PI},
   "bath-b":{label:"客卫",target:[11.55,.6,6.1],offset:[-4.6,7.5,5.5],walk:[11.75,1.62,5.85],yaw:0},
   "balcony-b":{label:"主卧阳台",target:[10.85,.6,13.3],offset:[-4.5,8,6],walk:[10.85,1.62,13.05],yaw:Math.PI},

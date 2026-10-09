@@ -13,6 +13,8 @@
 | 电视画面 | 166.5×93.7cm，75英寸16:9比例 |
 | 床头柜 | 42×40×57.5cm，朝西 |
 | 洗衣机 | 59.8×59cm，总高约84.8cm |
+| 生活阳台外晾衣架 | 横杆长156cm、总宽约158cm，外伸约62cm，杆高198cm；窗两侧固定 |
+| 晾晒上衣 / 长裤 | 上衣约55cm宽、64–67cm长；长裤约35cm宽、90cm长 |
 | 冰箱机身 | 55×55.7×182.4cm |
 | 厨房台面 | 高91cm，深约64–65cm |
 | 主卫淋浴盘 | 83×87cm |
@@ -23,3 +25,5 @@
 比例参考：[IKEA TROTTEN 办公桌](https://www.ikea.cn/cn/zh/cat/trotten-te-luo-teng-xi-lie-55989/)、[PAX衣柜框架](https://www.ikea.cn/cn/zh/p/pax-pa-ke-si-yi-gui-kuang-jia-shen-hui-se-90509126/)、[TRONES薄鞋柜](https://www.ikea.com/gb/en/p/trones-shoe-cabinet-storage-white-00397307/)。模型不代表指定购买清单。
 
 检验重点为门扇回转、家具不穿墙、不挡连续过道、床与桌椅分离，以及独立的马桶/淋浴区域。窗宽、阳台进深等未标明尺寸仍需现场复尺。
+
+外晾衣架采用窗外壁挂、分杆晾晒的定制布置，参考[Leifheit壁挂晾衣架](https://www.leifheit.com/en-en/wall-dryers/16460/wall-dryer-telegant-36-protect-plus/83201)的节省地面空间思路；本模型尺寸按当前窗宽与操作空间设计。
