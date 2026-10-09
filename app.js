@@ -37,6 +37,7 @@ const state = {
   walkLookActive: false,
   walkSpeed: readWalkSpeed(),
   viewSpeed: readViewSpeed(),
+  panSpeed: readPanSpeed(),
   moved: false,
   pointerStart: { x: 0, y: 0 },
   lastPointer: { x: 0, y: 0 },
@@ -549,11 +550,12 @@ Object.entries(PLAN).forEach(([name,p])=>{
 wallH(0,.40,0);wallH(2.15,3.5,0);addWindowHorizontal(1.275,0,1.75,1.2,1.02);
 wallV(0,0,3.5);
 wallWithDoorV(3.5,0,1.8,{id:"balcony-a",label:"生活阳台门",z:1.2,width:.82,hinge:"right",swing:-1});
-wallWithDoorH(0,3.5,1.8,{id:"kitchen",label:"厨房门",x:.65,width:.82,hinge:"right",swing:1});
+// 玄关左侧原厨房门封墙；厨房入口改到餐厅北侧，保持两者正常连通。
+wallWithDoorH(0,3.5,1.8,{id:"kitchen",label:"餐厅通往厨房",x:2.15,width:.82,hinge:"right",swing:1});
 wallH(3.5,4.20,0);wallH(5.5,6.2,0);addWindowHorizontal(4.85,0,1.30,1.4,.9);
 wallV(6.2,0,1.8);wallH(3.5,6.2,1.8);
-// 玄关朝楼梯的门删除，改成与周边毛坯同高的矮墙；东侧多余短墙取消。
-wallH(0,1.3,3.5,CONTEXT_WALL_HEIGHT);
+// 玄关南侧与楼梯过道相接，不设矮墙；东侧楼梯与餐厅边界属于室内全高墙。
+wallH(1.3,2.6,3.5);
 wallWithDoorV(1.3,1.8,3.5,{id:"entry-dining",label:"玄关通往餐厅",z:2.85,width:.80,hinge:"left",swing:-1});
 // 北侧两卧室：3.0m 与 3.6m 开间，3.3m 进深。
 wallH(6.2,6.7,1.8);wallH(8.7,9.2,1.8);addWindowHorizontal(7.7,1.8,2.0,1.4,.95);
@@ -562,9 +564,9 @@ wallV(6.2,1.8,5.1);wallV(9.2,1.8,5.1);
 wallWithDoorH(6.2,9.2,5.1,{id:"gaming",label:"电竞房门",x:8.6,width:.9,hinge:"right",swing:-1});
 // 客房保留过道入口，原客卫北侧门封墙。
 wallWithDoorH(9.2,12.8,5.1,{id:"guest",label:"客房门",x:9.7,width:.8,hinge:"left",swing:1});
-wallV(12.8,1.8,5.7);wallV(12.8,6.55,7.5);wallV(12.8,9.1,14.1);
+wallV(12.8,1.8,5.7);wallV(12.8,6.55,14.1);
 addWindowVertical(12.8,6.125,.85,.85,1.25,{frosted:true});
-addWindowVertical(12.8,8.3,1.6,1.4,.9);
+// 主卧上方原窗封成连续墙体。
 // 楼梯东侧为真实住宅边界；南侧屋面绝不并入客厅。
 wallV(2.6,3.5,10.3);
 wallH(2.6,2.9,10.3);wallH(6.75,8.9,10.3);
@@ -1408,7 +1410,7 @@ const roomViews={
   guest:{label:"客房",target:[11,.7,3.4],offset:[-4.8,8,5.8],walk:[10.45,1.62,4.6],yaw:0},
   suite:{label:"客厅与主卧连接区",target:[8.7,.5,7.1],offset:[-3.5,6,5],walk:[8.3,1.62,7.5],yaw:-Math.PI/2},
   master:{label:"主卧与南阳台",target:[10.8,.7,10.8],offset:[-6,10.4,7],walk:[9.6,1.62,10.2],yaw:-Math.PI/2},
-  kitchen:{label:"厨房",target:[1.8,.7,.9],offset:[4.5,7,5],walk:[2.4,1.62,1.15],yaw:Math.PI/2},
+  kitchen:{label:"厨房",target:[1.8,.7,.9],offset:[4.5,7,5],walk:[2.15,1.62,1.15],yaw:Math.PI/2},
   "balcony-a":{label:"生活阳台",target:[4.85,.6,.9],offset:[4.1,6.5,5.2],walk:[4.9,1.62,1.3],yaw:0},
   "bath-a":{label:"主卫",target:[8,.6,9.1],offset:[-4.6,7.5,5.5],walk:[8.25,1.62,8.75],yaw:Math.PI},
   "bath-b":{label:"客卫",target:[11.55,.6,6.1],offset:[-4.6,7.5,5.5],walk:[11.75,1.62,5.85],yaw:0},
@@ -1700,6 +1702,18 @@ function setViewSpeed(value){
   $("#viewSpeedValue").textContent=state.viewSpeed.toFixed(2)+"×";
   try{localStorage.setItem("jiji-view-speed",String(state.viewSpeed));}catch(_){}
 }
+function readPanSpeed(){
+  try{const saved=localStorage.getItem("jiji-pan-speed"),value=saved===null?1.50:Number(saved);
+    return Number.isFinite(value)?THREE.MathUtils.clamp(value,.25,3.00):1.50;
+  }catch(_){return 1.50;}
+}
+function setPanSpeed(value){
+  if(!Number.isFinite(Number(value)))return;
+  state.panSpeed=THREE.MathUtils.clamp(Number(value),.25,3.00);
+  $("#panSpeed").value=String(state.panSpeed);
+  $("#panSpeedValue").textContent=state.panSpeed.toFixed(2)+"×";
+  try{localStorage.setItem("jiji-pan-speed",String(state.panSpeed));}catch(_){}
+}
 function updateViewPan(delta){
   if(state.mode!=="orbit" || viewPanPressed.size===0)return;
   const x=Number(viewPanPressed.has("right"))-Number(viewPanPressed.has("left"));
@@ -1708,7 +1722,7 @@ function updateViewPan(delta){
   state.cameraTween=null;
   camera.updateMatrixWorld();
   const distance=camera.position.distanceTo(controls.target);
-  const step=2*distance*Math.tan(camera.fov*Math.PI/360)/Math.max(1,stage.clientHeight)*160*1.5*delta/length;
+  const step=2*distance*Math.tan(camera.fov*Math.PI/360)/Math.max(1,stage.clientHeight)*160*state.panSpeed*delta/length;
   // 用户指定上下、左右全部反转；移动镜头跟随按键方向，房屋在画面中相向移动。
   const right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0);
   right.y=0;right.normalize();
@@ -1823,6 +1837,8 @@ function bindUI() {
   setWalkSpeed(state.walkSpeed);
   $("#walkSpeed").addEventListener("input",event=>setWalkSpeed(event.target.value));
   setViewSpeed(state.viewSpeed);
+  setPanSpeed(state.panSpeed);
+  $("#panSpeed").addEventListener("input",event=>setPanSpeed(event.target.value));
   $("#viewSpeed").addEventListener("input",event=>setViewSpeed(event.target.value));
   $$("[data-pan]").forEach(button=>{
     const direction=button.dataset.pan;
@@ -2109,6 +2125,7 @@ window.JijiHome = {
   toggleDrawer,
   setWalkSpeed,
   setViewSpeed,
+  setPanSpeed,
   showPlan,
   faceNorth,
   setContextVisible,
