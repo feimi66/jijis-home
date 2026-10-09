@@ -137,8 +137,7 @@
             <div id="roomList" class="room-list" role="group" aria-label="房间快捷视角">
 <button class="room-button is-active" type="button" data-room="all"><span>我家整套</span><small>C1</small></button>
 <button class="room-button " type="button" data-room="living"><span>客厅</span><small>全景玻璃</small></button>
-<button class="room-button " type="button" data-room="dining"><span>餐厅</span><small>通玄关</small></button>
-<button class="room-button " type="button" data-room="entry"><span>玄关</span><small>薄收纳</small></button>
+<button class="room-button " type="button" data-room="dining"><span>餐厅</span><small>开放厨房</small></button>
 <button class="room-button " type="button" data-room="tv"><span>电视收纳</span><small>可开抽屉</small></button>
 <button class="room-button " type="button" data-room="gaming"><span>电竞房</span><small>双人桌</small></button>
 <button class="room-button " type="button" data-room="guest"><span>客房</span><small>北侧卧室</small></button>
@@ -149,7 +148,7 @@
 <button class="room-button " type="button" data-room="bath-a"><span>主卫</span><small>独立淋浴</small></button>
 <button class="room-button " type="button" data-room="bath-b"><span>客卫</span><small>主卧进入</small></button>
 <button class="room-button " type="button" data-room="balcony-a"><span>生活阳台</span><small>外侧晾晒</small></button>
-<button class="room-button " type="button" data-room="balcony-b"><span>主卧阳台</span><small>窄阳台</small></button>
+<button class="room-button " type="button" data-room="balcony-b"><span>主卧阳台</span><small>一体空间</small></button>
 </div>
           </div>
 
@@ -162,7 +161,7 @@
           <div class="panel-section display-section">
             <div class="section-title"><span>显示选项</span></div>
             <div class="display-options">
-              <label class="switch-row"><span><strong>周边毛坯轮廓</strong><small>C2、C3、楼梯、电梯与外廊</small></span><input id="contextToggle" type="checkbox" checked /><i aria-hidden="true"></i></label>
+              <label class="switch-row"><span><strong>周边毛坯轮廓</strong><small>C2、C3、楼梯、电梯、外廊与室外入口</small></span><input id="contextToggle" type="checkbox" checked /><i aria-hidden="true"></i></label>
               <label class="switch-row">
                 <span><strong>墙体</strong><small>隐藏后更易查看布局</small></span>
                 <input id="wallsToggle" type="checkbox" checked />
@@ -217,7 +216,7 @@
           <div class="help-grid">
             <div><b>01</b><strong>鸟瞰模式</strong><p>拖动画面旋转，滚轮缩放鼠标所指位置，双指可缩放；电脑可按住左下方向键，按当前视角移动镜头，按键旁可调平移速度；点击右上指南针恢复北朝上；视角滑动速度可调。点击房间按钮快速定位；点击门扇或电视柜抽屉可开关。</p></div>
             <div><b>02</b><strong>第一人称</strong><p>电脑使用WASD或方向键移动，手机使用左下方向键；移动速度可用滑杆调整并自动记住。拖动画面转向，左上角可调整视角滑动速度。靠近门后点击开门按钮，电脑也可按E。</p></div>
-            <div><b>03</b><strong>方案切换</strong><p>可关闭周边毛坯或查看整层轮廓；右侧C1为完整装修的我家。主卧阳台可切换休闲收纳或小工作台，推拉门均可开关。</p></div>
+            <div><b>03</b><strong>方案切换</strong><p>可关闭周边毛坯或查看整层轮廓；右侧C1为完整装修的我家。主卧与阳台连成一体，阳台区域可切换休闲收纳或小工作台。</p></div>
           </div>
           <button id="startTour" class="primary-button" type="button">开始看房</button>
         </div>
@@ -646,11 +645,10 @@ function addWindowVertical(x, z, depth, height = 1.45, sill = 0.85, options = {}
 
 // 以米为单位。标注互相冲突的总尺寸不用于强行拉伸房间。
 // 新原图右侧 C1。尺寸链按轴线重建；门区、窗宽及南阳台进深为照片估读。
-const HOME_OUTLINE=[[0,0],[6.2,0],[6.2,1.8],[12.8,1.8],[12.8,14.1],[8.9,14.1],[8.9,10.3],[2.6,10.3],[2.6,3.5],[0,3.5]];
+const HOME_OUTLINE=[[0,0],[6.2,0],[6.2,1.8],[12.8,1.8],[12.8,14.1],[8.9,14.1],[8.9,10.3],[2.6,10.3],[2.6,3.5],[1.3,3.5],[1.3,1.8],[0,1.8]];
 const PLAN = {
   kitchen: {x:0,z:0,w:3.5,d:1.8},
   balconyA: {x:3.5,z:0,w:2.7,d:1.8},
-  entry: {x:0,z:1.8,w:1.3,d:1.7},
   dining: {x:1.3,z:1.8,w:4.9,d:1.7},
   diningSouth: {x:2.6,z:3.5,w:3.6,d:1.6},
   bedroomA: {x:6.2,z:1.8,w:3,d:3.3},
@@ -770,21 +768,20 @@ function wallWithDoorV(x, z1, z2, door) {
 // C1 所有地面彼此连通；公区楼梯、电梯和屋面不登记为可漫游地面。
 Object.entries(PLAN).forEach(([name,p])=>{
   const room={balconyA:"balcony-a",balconyB:"balcony-b",bedroomA:"gaming",bedroomB:"guest",bathA:"bath-a",bathB:"bath-b",diningSouth:"dining",suiteEntry:"suite",suiteTurn:"suite"}[name]||name;
-  const tile=name==="kitchen"||name.startsWith("bath");
-  const wood=name.startsWith("bedroom")||name==="master";
+  const tile=name.startsWith("bath");
+  const wood=name.startsWith("bedroom")||name==="master"||name==="balconyB";
   floor(room,p.x,p.z,p.w,p.d,tile?materials.floorBath:wood?materials.floorWood:materials.floorStone);
 });
 // 厨房北凸、生活阳台经厨房侧门相连。
 wallH(0,.40,0);wallH(2.15,3.5,0);addWindowHorizontal(1.275,0,1.75,1.2,1.02);
-wallV(0,0,3.5);
+wallV(0,0,1.8);
 wallWithDoorV(3.5,0,1.8,{id:"balcony-a",label:"生活阳台门",z:1.2,width:.82,hinge:"right",swing:-1});
-// 玄关左侧原厨房门封墙；厨房入口改到餐厅北侧，保持两者正常连通。
-wallWithDoorH(0,3.5,1.8,{id:"kitchen",label:"餐厅通往厨房",x:2.15,width:.82,hinge:"right",swing:1});
+// 厨房与餐厅完全开放；西端保留厨房与室外入口之间的真实边界。
+wallH(0,1.3,1.8);
 wallH(3.5,4.20,0);wallH(5.5,6.2,0);addWindowHorizontal(4.85,0,1.30,1.4,.9);
 wallV(6.2,0,1.8);wallH(3.5,6.2,1.8);
-// 玄关南侧与楼梯过道相接，不设矮墙；东侧楼梯与餐厅边界属于室内全高墙。
-wallH(1.3,2.6,3.5);
-wallWithDoorV(1.3,1.8,3.5,{id:"entry-dining",label:"玄关通往餐厅",z:2.85,width:.80,hinge:"left",swing:-1});
+// 入口属楼梯公区，不登记在自家；仅保留通往餐厅的入户门。
+wallWithDoorV(1.3,1.8,3.5,{id:"entry-dining",label:"入户门",z:2.85,width:.80,hinge:"left",swing:-1});
 // 北侧两卧室：3.0m 与 3.6m 开间，3.3m 进深。
 wallH(6.2,6.7,1.8);wallH(8.7,9.2,1.8);addWindowHorizontal(7.7,1.8,2.0,1.4,.95);
 wallH(9.2,9.8,1.8);wallH(12.2,12.8,1.8);addWindowHorizontal(11,1.8,2.4,1.4,.95);
@@ -804,11 +801,9 @@ wallV(10.2,5.1,7.1);
 wallWithDoorH(10.2,12.8,7.1,{id:"bath-b",label:"主卧通往客卫",x:11.55,width:.86,hinge:"left",swing:-1});
 // 图二连接区完全开放，取消围墙和套间/主卧入口门；仅保留主卫实体围墙。
 wallV(7.1,8.0,10.3);
-wallV(8.9,8.0,12.3);
+wallV(8.9,8.0,14.1);
 wallWithDoorH(7.1,8.9,8.0,{id:"bath-a",label:"主卫门",x:8.35,width:.8,hinge:"right",swing:1});
-// 主卧南凸，窄阳台保留完整轮廓与可开关推拉门。
-wallWithDoorH(8.9,12.8,12.3,{id:"balcony-b",label:"主卧阳台推拉门",x:10.85,width:2.35,type:"sliding"});
-wallV(8.9,12.3,14.1);
+// 主卧与南侧阳台合为连续空间，取消全部中间墙、门框及推拉门。
 wallH(8.9,9.15,14.1);wallH(12.55,12.8,14.1);
 addWindowHorizontal(10.85,14.1,3.4,1.5,.88);
 
@@ -1431,22 +1426,6 @@ function addWallLight(parent,x,y,z,rotation=0){
   shade.rotation.x=-.3;
   const diffuser=cylinder(group,0,-.115,.128,.045,.005,materials.warmLED,24);diffuser.castShadow=false;
 }
-function addEntryStorage(){
-  const group=new THREE.Group();group.name="玄关薄鞋柜";group.position.set(.16,0,2.16);group.rotation.y=Math.PI/2;furnitureGroup.add(group);
-  group.userData.nominalSize=[.52,.18,.78];
-  box(group,0,.49,0,.52,.78,.18,materials.offWhite,{radius:.012});
-  for(const y of [.296,.687]){
-    box(group,0,y,.096,.5,.372,.014,materials.offWhite,{radius:.008});
-    box(group,0,y+.135,.109,.20,.008,.008,materials.black,{radius:.003});
-  }
-  box(group,0,.89,0,.54,.02,.20,materials.oakLight,{radius:.006});
-  // 镜子和搁板贴着实体短墙，朝向玄关。
-  box(group,0,1.40,-.074,.43,.76,.018,materials.oakLight,{radius:.035});
-  box(group,0,1.40,-.063,.397,.725,.004,materials.chrome,{radius:.025});
-  const tray=objectMesh(group,new THREE.CylinderGeometry(.063,.053,.009,32),materials.fabricDark,.15,.91,.01);
-  tray.scale.z=.6;
-}
-addEntryStorage();
 addWallLight(furnitureGroup,12.725,1.35,9.37,-Math.PI/2);
 addWallLight(furnitureGroup,12.725,1.35,11.83,-Math.PI/2);
 box(furnitureGroup,12.725,1.04,10.60,.026,1.30,2.96,materials.oakLight,{radius:.007,name:"主卧连续床头饰面"});
@@ -1512,9 +1491,11 @@ function buildBuildingContext(){
   slab(-5.2,10.3,2.6,18.6);slab(-5.2,18.6,-1,20.1);
   path([[-5.2,10.3],[.35,10.3]]);path([[1.25,10.3],[2.6,10.3],[2.6,18.6],[-1,18.6],[-1,20.1],[-5.2,20.1],[-5.2,10.3]]);
   [[-3.4,10.3,-3.4,12.45],[-5.2,13.4,-3.4,13.4],[-1,10.3,-1,12.55],[-1,13.6,0,13.6],[.9,13.6,2.6,13.6],[0,13.6,0,15.3],[1.15,13.6,1.15,15.3],[0,15.3,2.6,15.3],[-1,16.25,-1,18.6],[-5.2,18.6,-1,18.6]].forEach(p=>line(...p));
-  // 两部电梯、前厅、外廊、中央楼梯。
+  // 两部电梯、前厅、外廊、中央楼梯及室外入口，地坪连为一个毛坯区域。
+  slab(0,1.8,1.3,3.5);
   slab(-2.2,1.8,0,8.5);slab(-5.2,8.5,0,10.3);slab(0,3.5,2.6,10.3);slab(-4.5,3.5,-2.2,8.5);
-  [[-2.2,1.8,0,1.8],[-2.2,1.8,-2.2,3.5],[0,3.5,0,8.9],[0,9.8,0,10.3],[1.3,5.15,1.3,9.45]].forEach(p=>line(...p));
+  [[-2.2,1.8,0,1.8],[-2.2,1.8,-2.2,3.5],[0,1.8,0,8.9],[0,9.8,0,10.3],[1.3,5.15,1.3,9.45]].forEach(p=>line(...p));
+  // 公区矮墙沿入口左侧接续楼梯外围，入口下方保持敞开，不再重建横墙。
   for(const [z1,z2]of [[3.5,5.85],[6.15,8.5]]){
     path([[-2.2,z1],[-4.5,z1],[-4.5,z2],[-2.2,z2]],false,.85*1.5);
     line(-2.2,z1,-2.2,z1+.62,.85*1.5);line(-2.2,z2-.62,-2.2,z2,.85*1.5);
@@ -1597,8 +1578,7 @@ function addLabel(room, title, subtitle, x, z) {
 }
 
 addLabel("living","客厅","单片全景玻璃 · 无茶几",4.8,8.7);
-addLabel("dining","餐厅","连通玄关与过道",4.45,3.5);
-addLabel("entry","玄关","入户收纳",.65,2.5);
+addLabel("dining","餐厅","开放厨房 · 连通过道",4.45,3.5);
 addLabel("kitchen","厨房","原图北侧凸出",1.8,.85);
 addLabel("balcony-a","生活阳台","洗衣 · 外侧晾晒",4.85,.85);
 addLabel("gaming","电竞房","3.0m × 3.3m轴线",7.7,3.9);
@@ -1608,7 +1588,7 @@ addLabel("suite","开放连接区","客厅连通主卧与主卫",8.2,7.0);
 addLabel("bath-a","主卫","独立淋浴区",8,9.3);
 addLabel("bath-b","客卫","整间卫浴 · 由主卧进入",11.55,6.2);
 addLabel("master","主卧","3.9m开间 · 南侧延伸",10.9,10.4);
-addLabel("balcony-b","主卧阳台","进深按照片暂估",10.85,13.55);
+addLabel("balcony-b","主卧阳台","与主卧连成一体",10.85,13.55);
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(50, 50),
@@ -1631,7 +1611,6 @@ const roomViews={
   all:{label:"我家 C1 · 完整户型",target:[6.4,.4,7.05],offset:[-12,21,17],walk:[5.85,1.62,5.65],yaw:-Math.PI/2},
   living:{label:"客厅",target:[4.85,.6,8.4],offset:[-5.5,8.5,6.5],walk:[5.85,1.62,8.0],yaw:-Math.PI/2},
   dining:{label:"餐厅",target:[4.3,.6,3.3],offset:[-5,8,6],walk:[3.1,1.62,4.5],yaw:-Math.PI/2},
-  entry:{label:"玄关",target:[.65,.7,2.6],offset:[3.2,5,4.5],walk:[.65,1.62,2.7],yaw:0},
   tv:{label:"电视与收纳柜",target:[6.72,1.25,8.75],offset:[-2.8,1.1,.8],walk:[5.5,1.62,8.75],yaw:-Math.PI/2},
   hall:{label:"开放过道",target:[6.5,.4,5.7],offset:[-4.8,8.5,6.1],walk:[6.9,1.62,5.7],yaw:-Math.PI/2},
   gaming:{label:"双人电竞房",target:[7.7,.7,3.4],offset:[-4.5,8,5.5],walk:[8.5,1.62,4.4],yaw:0},
