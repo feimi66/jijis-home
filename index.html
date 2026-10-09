@@ -78,10 +78,10 @@
           <div id="viewPanControls" class="view-pan-controls" role="group" aria-label="按当前视角平移">
             <span>按当前视角平移</span>
             <div class="move-pad">
-              <button type="button" data-pan="up" aria-label="整屋向上移动">▲</button>
-              <button type="button" data-pan="left" aria-label="整屋向左移动">◀</button>
-              <button type="button" data-pan="down" aria-label="整屋向下移动">▼</button>
-              <button type="button" data-pan="right" aria-label="整屋向右移动">▶</button>
+              <button type="button" data-pan="up" aria-label="视角向上平移">▲</button>
+              <button type="button" data-pan="left" aria-label="视角向左平移">◀</button>
+              <button type="button" data-pan="down" aria-label="视角向下平移">▼</button>
+              <button type="button" data-pan="right" aria-label="视角向右平移">▶</button>
             </div>
           </div>
 
@@ -137,11 +137,11 @@
 <button class="room-button " type="button" data-room="gaming"><span>电竞房</span><small>双人桌</small></button>
 <button class="room-button " type="button" data-room="guest"><span>客房</span><small>北侧卧室</small></button>
 <button class="room-button " type="button" data-room="master"><span>主卧</span><small>南侧延伸</small></button>
-<button class="room-button " type="button" data-room="suite"><span>套间入口</span><small>通卧卫</small></button>
+<button class="room-button " type="button" data-room="suite"><span>开放连接区</span><small>通卧卫</small></button>
 <button class="room-button " type="button" data-room="kitchen"><span>厨房</span><small>北侧凸出</small></button>
 <button class="room-button " type="button" data-room="hall"><span>开放过道</span><small>连通全屋</small></button>
 <button class="room-button " type="button" data-room="bath-a"><span>主卫</span><small>独立淋浴</small></button>
-<button class="room-button " type="button" data-room="bath-b"><span>客卫</span><small>干湿分区</small></button>
+<button class="room-button " type="button" data-room="bath-b"><span>客卫</span><small>主卧进入</small></button>
 <button class="room-button " type="button" data-room="balcony-a"><span>生活阳台</span><small>外侧晾晒</small></button>
 <button class="room-button " type="button" data-room="balcony-b"><span>主卧阳台</span><small>窄阳台</small></button>
 </div>
@@ -156,7 +156,7 @@
           <div class="panel-section display-section">
             <div class="section-title"><span>显示选项</span></div>
             <div class="display-options">
-              <label class="switch-row"><span><strong>周边毛坯轮廓</strong><small>C2、C3、楼梯、电梯和屋面</small></span><input id="contextToggle" type="checkbox" checked /><i aria-hidden="true"></i></label>
+              <label class="switch-row"><span><strong>周边毛坯轮廓</strong><small>C2、C3、楼梯、电梯与外廊</small></span><input id="contextToggle" type="checkbox" checked /><i aria-hidden="true"></i></label>
               <label class="switch-row">
                 <span><strong>墙体</strong><small>隐藏后更易查看布局</small></span>
                 <input id="wallsToggle" type="checkbox" checked />
@@ -209,7 +209,7 @@
           <span class="dialog-kicker">操作指南</span>
           <h2 id="helpTitle">自在地逛逛吉吉的家</h2>
           <div class="help-grid">
-            <div><b>01</b><strong>鸟瞰模式</strong><p>拖动画面旋转，滚轮缩放鼠标所指位置，双指可缩放；电脑可按住左下方向键，按当前屏幕方向平移；点击右上指南针恢复北朝上；视角滑动速度可调。点击房间按钮快速定位；点击门扇或电视柜抽屉可开关。</p></div>
+            <div><b>01</b><strong>鸟瞰模式</strong><p>拖动画面旋转，滚轮缩放鼠标所指位置，双指可缩放；电脑可按住左下方向键，按当前视角移动镜头；点击右上指南针恢复北朝上；视角滑动速度可调。点击房间按钮快速定位；点击门扇或电视柜抽屉可开关。</p></div>
             <div><b>02</b><strong>第一人称</strong><p>电脑使用WASD或方向键移动，手机使用左下方向键；移动速度可用滑杆调整并自动记住。拖动画面转向，左上角可调整视角滑动速度。靠近门后点击开门按钮，电脑也可按E。</p></div>
             <div><b>03</b><strong>方案切换</strong><p>可关闭周边毛坯或查看整层轮廓；右侧C1为完整装修的我家。主卧阳台可切换休闲收纳或小工作台，推拉门均可开关。</p></div>
           </div>
@@ -238,6 +238,7 @@ const toast = $("#toast");
 
 const PLAN_CENTER = new THREE.Vector3(6.4, 0, 7.05);
 const CEILING_HEIGHT = 2.7;
+const CONTEXT_WALL_HEIGHT = .72 * 1.5;
 const WALL_THICKNESS = 0.12;
 const DOOR_HEIGHT = 2.12;
 const DOOR_FRAME_WIDTH = 0.05;
@@ -773,18 +774,16 @@ wallWithDoorV(3.5,0,1.8,{id:"balcony-a",label:"生活阳台门",z:1.2,width:.82,
 wallWithDoorH(0,3.5,1.8,{id:"kitchen",label:"厨房门",x:.65,width:.82,hinge:"right",swing:1});
 wallH(3.5,4.20,0);wallH(5.5,6.2,0);addWindowHorizontal(4.85,0,1.30,1.4,.9);
 wallV(6.2,0,1.8);wallH(3.5,6.2,1.8);
-wallWithDoorH(0,1.3,3.5,{id:"entry",label:"入户门",x:.65,width:.92,hinge:"left",swing:1,open:false});
-wallH(1.3,2.6,3.5);
+// 玄关朝楼梯的门删除，改成与周边毛坯同高的矮墙；东侧多余短墙取消。
+wallH(0,1.3,3.5,CONTEXT_WALL_HEIGHT);
 wallWithDoorV(1.3,1.8,3.5,{id:"entry-dining",label:"玄关通往餐厅",z:2.85,width:.80,hinge:"left",swing:-1});
 // 北侧两卧室：3.0m 与 3.6m 开间，3.3m 进深。
 wallH(6.2,6.7,1.8);wallH(8.7,9.2,1.8);addWindowHorizontal(7.7,1.8,2.0,1.4,.95);
 wallH(9.2,9.8,1.8);wallH(12.2,12.8,1.8);addWindowHorizontal(11,1.8,2.4,1.4,.95);
 wallV(6.2,1.8,5.1);wallV(9.2,1.8,5.1);
 wallWithDoorH(6.2,9.2,5.1,{id:"gaming",label:"电竞房门",x:8.6,width:.9,hinge:"right",swing:-1});
-// 同一堵墙上的客房门和客卫门一次划分，避免单门墙段封住另一个开口。
-wallH(9.2,9.25,5.1);wallH(10.15,11.6,5.1);wallH(12.5,12.8,5.1);
-for(const [x1,x2]of [[9.25,10.15],[11.6,12.5]])wallH(x1,x2,5.1,CEILING_HEIGHT-DOOR_FRAME_TOP,materials.wall,(CEILING_HEIGHT+DOOR_FRAME_TOP)/2);
-addDoor({id:"guest",label:"客房门",x:9.7,z:5.1,width:.8,hinge:"left",swing:1});
+// 客房保留过道入口，原客卫北侧门封墙。
+wallWithDoorH(9.2,12.8,5.1,{id:"guest",label:"客房门",x:9.7,width:.8,hinge:"left",swing:1});
 wallV(12.8,1.8,5.7);wallV(12.8,6.55,7.5);wallV(12.8,9.1,14.1);
 addWindowVertical(12.8,6.125,.85,.85,1.25,{frosted:true});
 addWindowVertical(12.8,8.3,1.6,1.4,.9);
@@ -792,15 +791,11 @@ addWindowVertical(12.8,8.3,1.6,1.4,.9);
 wallV(2.6,3.5,10.3);
 wallH(2.6,2.9,10.3);wallH(6.75,8.9,10.3);
 addWindowHorizontal(4.825,10.3,3.85,2.64,.02,{panoramic:true});
-// 过道完全开放连通客餐厅；客卫保留图示两格，干湿开口为装修安排。
-addDoor({id:"bath-b",label:"客卫门",x:12.05,z:5.1,width:.8,hinge:"right",swing:1});
+// 客卫为一整间，取消内部隔墙；入口改为主卧北侧原衣柜位置。
 wallV(10.2,5.1,7.1);
-wallWithDoorV(11.3,5.1,7.1,{id:"bath-b-zone",label:"客卫干湿分区门",z:6.02,width:.75,hinge:"left",swing:-1});
-wallH(8.9,12.8,7.1);
-// 手绘遮挡处按可正常通行的套间入口重建，主卧及主卫有独立门。
-wallV(7.1,6.3,10.3);
-wallWithDoorH(7.1,10.2,6.3,{id:"suite",label:"主卧套间入口",x:9.45,width:.9,hinge:"right",swing:-1});
-wallWithDoorV(8.9,7.1,8.0,{id:"master",label:"主卧门",z:7.55,width:.74,hinge:"right",swing:1});
+wallWithDoorH(10.2,12.8,7.1,{id:"bath-b",label:"主卧通往客卫",x:11.55,width:.86,hinge:"left",swing:-1});
+// 图二连接区完全开放，取消围墙和套间/主卧入口门；仅保留主卫实体围墙。
+wallV(7.1,8.0,10.3);
 wallV(8.9,8.0,12.3);
 wallWithDoorH(7.1,8.9,8.0,{id:"bath-a",label:"主卫门",x:8.35,width:.8,hinge:"right",swing:1});
 // 主卧南凸，窄阳台保留完整轮廓与可开关推拉门。
@@ -1417,9 +1412,8 @@ const guestBed=addBed(furnitureGroup,11.54,3.60,1.5,2,-Math.PI/2);guestBed.userD
 const guestWardrobe=addCabinet(furnitureGroup,9.87,2.16,.95,.58,2.364);guestWardrobe.name="客房衣柜";
 addDesk(furnitureGroup,9.58,3.59,1.10,.60,Math.PI/2);
 addChair(furnitureGroup,10.18,3.59,-Math.PI/2,materials.fabric);
-// 主卧保留向南延伸的整间轮廓，衣柜靠北，床尾西侧通道通往南阳台。
+// 主卧北侧衣柜暂时删除，原柜位作为通往客卫的门前区域。
 const masterBed=addBed(furnitureGroup,11.52,10.60,1.8,2,-Math.PI/2);masterBed.userData.room="master";
-addWardrobe(furnitureGroup,11.50,7.59,2.0,.58,2.364,0);
 addNightstand(furnitureGroup,12.24,9.37);addNightstand(furnitureGroup,12.24,11.83);
 function addWallLight(parent,x,y,z,rotation=0){
   const group=new THREE.Group();group.name="床头阅读壁灯";group.position.set(x,y,z);group.rotation.y=rotation;parent.add(group);
@@ -1496,12 +1490,12 @@ function buildBuildingContext(){
   const bare=new THREE.MeshStandardMaterial({color:0xc9cbc6,roughness:1});
   const floors=[],walls=[],runs=[];
   function slab(x1,z1,x2,z2){floors.push(box(floorGroup,(x1+x2)/2,-.04,(z1+z2)/2,x2-x1,.08,z2-z1,concrete,{radius:0,castShadow:false}));}
-  function line(x1,z1,x2,z2,h=.72){
+  function line(x1,z1,x2,z2,h=CONTEXT_WALL_HEIGHT){
     const isH=Math.abs(z1-z2)<1e-6;if(Math.hypot(x2-x1,z2-z1)<1e-6)return;
     walls.push(box(wallGroup,(x1+x2)/2,h/2,(z1+z2)/2,isH?Math.abs(x2-x1):.14,h,isH?.14:Math.abs(z2-z1),bare,{radius:0,castShadow:false}));
     runs.push({x1:Math.min(x1,x2),x2:Math.max(x1,x2),z1:Math.min(z1,z2),z2:Math.max(z1,z2),isH,h});
   }
-  function path(points,closed=false,h=.72){for(let i=1;i<points.length;i++)line(...points[i-1],...points[i],h);if(closed)line(...points.at(-1),...points[0],h);}
+  function path(points,closed=false,h=CONTEXT_WALL_HEIGHT){for(let i=1;i<points.length;i++)line(...points[i-1],...points[i],h);if(closed)line(...points.at(-1),...points[0],h);}
   // C3 左侧住宅及南阳台。
   [[-13.4,1.8,-10.1,10.3],[-10.1,5.1,-5.2,10.3],[-8.3,3.5,-6.1,5.1],[-13.4,10.3,-5.2,15.6],[-12.9,15.6,-6,17.7]].forEach(p=>slab(...p));
   path([[-13.4,1.8],[-10.1,1.8],[-10.1,5.1],[-8.3,5.1],[-8.3,3.5],[-6.1,3.5],[-6.1,5.1],[-5.2,5.1],[-5.2,15.6],[-6,15.6],[-6,17.7],[-12.9,17.7],[-12.9,15.6],[-13.4,15.6]],true);
@@ -1514,8 +1508,8 @@ function buildBuildingContext(){
   slab(-2.2,1.8,0,8.5);slab(-5.2,8.5,0,10.3);slab(0,3.5,2.6,10.3);slab(-4.5,3.5,-2.2,8.5);
   [[-2.2,1.8,0,1.8],[-2.2,1.8,-2.2,3.5],[0,3.5,0,8.9],[0,9.8,0,10.3],[1.3,5.15,1.3,9.45]].forEach(p=>line(...p));
   for(const [z1,z2]of [[3.5,5.85],[6.15,8.5]]){
-    path([[-2.2,z1],[-4.5,z1],[-4.5,z2],[-2.2,z2]],false,.85);
-    line(-2.2,z1,-2.2,z1+.62,.85);line(-2.2,z2-.62,-2.2,z2,.85);
+    path([[-2.2,z1],[-4.5,z1],[-4.5,z2],[-2.2,z2]],false,.85*1.5);
+    line(-2.2,z1,-2.2,z1+.62,.85*1.5);line(-2.2,z2-.62,-2.2,z2,.85*1.5);
     for(const sign of [-1,1]){
       const mark=box(group,-3.35,.014,(z1+z2)/2,.026,.02,2.70,bare,{radius:0,castShadow:false});mark.rotation.y=sign*.68;
     }
@@ -1526,9 +1520,7 @@ function buildBuildingContext(){
     box(group,1.91,h/2,5.49+i*.34,.98,h,.34,concrete,{radius:0,castShadow:false});
   }
   box(group,1.3,.595,4.325,2.28,.06,1.65,concrete,{radius:0,castShadow:false});
-  // 图上屋面保持室外灰色平台，和 C1 南伸主卧区分。
-  slab(2.6,10.3,8.9,17.9);
-  line(2.6,10.3,2.6,17.9,.32);line(2.6,17.9,8.9,17.9,.32);line(8.9,14.1,8.9,17.9,.32);
+  // 用户确认客厅南侧是空地，不制作平台、围墙或毛坯地坪。
   for(const h of runs.filter(r=>r.isH))for(const v of runs.filter(r=>!r.isH)){
     if(v.x1<h.x1||v.x1>h.x2||h.z1<v.z1||h.z1>v.z2)continue;
     const height=Math.min(h.h,v.h);
@@ -1604,9 +1596,9 @@ addLabel("balcony-a","生活阳台","洗衣 · 外侧晾晒",4.85,.85);
 addLabel("gaming","电竞房","3.0m × 3.3m轴线",7.7,3.9);
 addLabel("guest","客房","3.6m × 3.3m轴线",11.4,3.8);
 addLabel("hall","开放过道","客餐厅直接进入",6.5,5.7);
-addLabel("suite","套间入口","主卧与主卫分门",8.2,7.0);
+addLabel("suite","开放连接区","客厅连通主卧与主卫",8.2,7.0);
 addLabel("bath-a","主卫","独立淋浴区",8,9.3);
-addLabel("bath-b","客卫","干湿分区",11.55,6.2);
+addLabel("bath-b","客卫","整间卫浴 · 由主卧进入",11.55,6.2);
 addLabel("master","主卧","3.9m开间 · 南侧延伸",10.9,10.4);
 addLabel("balcony-b","主卧阳台","进深按照片暂估",10.85,13.55);
 
@@ -1636,7 +1628,7 @@ const roomViews={
   hall:{label:"开放过道",target:[6.5,.4,5.7],offset:[-4.8,8.5,6.1],walk:[6.9,1.62,5.7],yaw:-Math.PI/2},
   gaming:{label:"双人电竞房",target:[7.7,.7,3.4],offset:[-4.5,8,5.5],walk:[8.5,1.62,4.4],yaw:0},
   guest:{label:"客房",target:[11,.7,3.4],offset:[-4.8,8,5.8],walk:[10.45,1.62,4.6],yaw:0},
-  suite:{label:"主卧套间入口",target:[8.7,.5,7.1],offset:[-3.5,6,5],walk:[8.3,1.62,7.5],yaw:-Math.PI/2},
+  suite:{label:"客厅与主卧连接区",target:[8.7,.5,7.1],offset:[-3.5,6,5],walk:[8.3,1.62,7.5],yaw:-Math.PI/2},
   master:{label:"主卧与南阳台",target:[10.8,.7,10.8],offset:[-6,10.4,7],walk:[9.6,1.62,10.2],yaw:-Math.PI/2},
   kitchen:{label:"厨房",target:[1.8,.7,.9],offset:[4.5,7,5],walk:[2.4,1.62,1.15],yaw:Math.PI/2},
   "balcony-a":{label:"生活阳台",target:[4.85,.6,.9],offset:[4.1,6.5,5.2],walk:[4.9,1.62,1.3],yaw:0},
@@ -1938,14 +1930,14 @@ function updateViewPan(delta){
   state.cameraTween=null;
   camera.updateMatrixWorld();
   const distance=camera.position.distanceTo(controls.target);
-  const step=2*distance*Math.tan(camera.fov*Math.PI/360)/Math.max(1,stage.clientHeight)*160*delta/length;
-  // 以当前屏幕右方及地面向屏幕上方的投影移动，始终保持地面焦点高度。
+  const step=2*distance*Math.tan(camera.fov*Math.PI/360)/Math.max(1,stage.clientHeight)*160*1.5*delta/length;
+  // 用户指定上下、左右全部反转；移动镜头跟随按键方向，房屋在画面中相向移动。
   const right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0);
   right.y=0;right.normalize();
   const forward=new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0),right).normalize();
   const screenUp=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,1);
   const verticalProjection=Math.max(.12,forward.dot(screenUp));
-  const movement=right.multiplyScalar(-x*step).add(forward.multiplyScalar(-y*step/verticalProjection));
+  const movement=right.multiplyScalar(x*step).add(forward.multiplyScalar(y*step/verticalProjection));
   camera.position.add(movement);controls.target.add(movement);
   controls.update();
 }
@@ -2250,7 +2242,7 @@ function faceNorth(){
   clearDirectionButtons();
   state.cameraTween=null;
   if(state.mode==="walk"){
-    state.walkYaw=0;updateWalkRotation();updateCompass();showToast("已朝向北方");return;
+    state.walkYaw=0;updateWalkRotation();updateCompass();showToast("已朝向图面上方");return;
   }
   // 清掉拖拽阻尼，再用球面角度旋转，保留当前焦点、俯仰和缩放。
   const damping=controls.enableDamping;controls.enableDamping=false;controls.update();controls.enableDamping=damping;
