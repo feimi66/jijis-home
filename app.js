@@ -591,11 +591,14 @@ wallWithDoorV(8.9,8.0,10.3,{id:"bath-a-ensuite",label:"主卧通往主卫",z:8.6
 schemeWallH("merged",10.2,12.8,7.1);
 wallWithDoorV(10.2,5.1,7.1,{id:"bath-b-corridor",label:"过道通往客卫",z:6.20,width:.80,hinge:"right",swing:1,scheme:"merged"});
 
-// B：保留原内部通行，在客厅侧用完整隔墙与套间门围合主卧入口。
-schemeWallH("glass",7.1,10.2,6.3);
-wallWithDoorV(7.1,6.3,8.0,{id:"master-b",label:"主卧套间门",z:7.00,width:.90,hinge:"right",swing:1,open:false,scheme:"glass"});
+// B：过道边界与客卫南墙平齐，两扇朝向公共过道的门分别正对客房和电竞房。
+// 主卫入口向北延伸0.9m；前室东侧稍外移，为80cm门和门框留足净宽。
+schemeWallV("glass",7.1,7.1,8.0);
+wallWithDoorH(7.1,9.1,7.1,{id:"bath-a",label:"主卫门",x:8.6,width:.80,hinge:"left",swing:-1,scheme:"glass"});
+schemeWallV("glass",9.1,7.1,8.0);
+schemeWallH("glass",8.9,9.1,8.0);
 schemeWallV("glass",8.9,8.0,10.3);
-wallWithDoorH(7.1,8.9,8.0,{id:"bath-a",label:"主卫门",x:8.35,width:.8,hinge:"right",swing:1,scheme:"glass"});
+wallWithDoorH(9.1,10.2,7.1,{id:"master-b",label:"主卧套间门",x:9.7,width:.86,hinge:"left",swing:-1,open:false,scheme:"glass"});
 schemeWallV("glass",10.2,5.1,7.1);
 wallWithDoorH(10.2,12.8,7.1,{id:"bath-b",label:"主卧通往客卫",x:11.55,width:.86,hinge:"left",swing:-1,scheme:"glass"});
 
@@ -1465,9 +1468,9 @@ addLabel("gaming","电竞房","3.0m × 3.3m轴线",7.7,3.9);
 addLabel("guest","客房","3.6m × 3.3m轴线",11.4,3.8);
 addLabel("hall","开放过道","客餐厅直接进入",6.5,5.7);
 addLabel("suite","独立过道","公共通道 · 主卧有门",8.2,7.0,"merged");
-addLabel("suite","主卧入口","完整隔墙 · 套间门",8.2,7.0,"glass");
+addLabel("suite","主卧入口","客房正对 · 独立房门",9.65,7.9,"glass");
 addLabel("bath-a","主卫","由主卧直接进入",8,9.3,"merged");
-addLabel("bath-a","主卫","由套间内部进入",8,9.3,"glass");
+addLabel("bath-a","主卫","延伸入口 · 电竞房正对",8,9.3,"glass");
 addLabel("bath-b","客卫","整间卫浴 · 从过道进入",11.55,6.2,"merged");
 addLabel("bath-b","客卫","整间卫浴 · 从主卧进入",11.55,6.2,"glass");
 addLabel("master","主卧","3.9m开间 · 南侧延伸",10.9,10.4);
@@ -1617,7 +1620,7 @@ function readCorridorScheme(){
   catch(_){return "glass";}
 }
 function schemeDescription(scheme){
-  return scheme==="merged"?"主卧直连主卫；客卫从过道中部进入，主卧设独立房门。":"保留现有卫浴连接，外侧加隔墙和套间门，关门后主卧独立。";
+  return scheme==="merged"?"主卧直连主卫；客卫从过道中部进入，主卧设独立房门。":"过道墙与客卫平齐；主卧门正对客房，主卫延伸入口正对电竞房。";
 }
 function setScheme(scheme,announce=true){
   if(scheme!=="merged"&&scheme!=="glass")return;
@@ -1631,8 +1634,9 @@ function setScheme(scheme,announce=true){
   $("#schemeCaption").textContent=scheme==="merged"?"独立过道":"封闭入口";
   $("#schemeDescription").textContent=schemeDescription(scheme);
   $$(".scheme-button").forEach(button=>{const active=button.dataset.scheme===scheme;button.classList.toggle("is-active",active);button.setAttribute("aria-pressed",String(active));});
-  roomViews.suite.label=scheme==="merged"?"独立过道与主卧门":"主卧套间入口";
-  for(const [room,text] of [["suite",scheme==="merged"?"公共通道":"隔墙与套间门"],["bath-a",scheme==="merged"?"主卧直达":"套间进入"],["bath-b",scheme==="merged"?"过道进入":"主卧进入"]]){
+  roomViews.suite.label=scheme==="merged"?"独立过道与主卧门":"主卧入口 · 客房对面";
+  roomViews.suite.walk=scheme==="merged"?[8.3,1.62,7.5]:[9.4,1.62,6.6];
+  for(const [room,text] of [["suite",scheme==="merged"?"公共通道":"客房对面"],["bath-a",scheme==="merged"?"主卧直达":"电竞房对面"],["bath-b",scheme==="merged"?"过道进入":"主卧进入"]]){
     $$('[data-room="'+room+'"] small').forEach(node=>node.textContent=text);
   }
   populateDoors();
@@ -1647,7 +1651,7 @@ function setScheme(scheme,announce=true){
     updateDoorAction();
   }
   if(state.room==="suite")viewStatus.textContent=roomViews.suite.label;
-  if(announce)showToast(scheme==="merged"?"A · 独立过道：主卫连接主卧，客卫从过道进入":"B · 封闭入口：保留内部连接，主卧增加套间门");
+  if(announce)showToast(scheme==="merged"?"A · 独立过道：主卫连接主卧，客卫从过道进入":"B · 封闭入口：主卧正对客房，主卫正对电竞房");
 }
 
 function updateDisplayOptions() {
