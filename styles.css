@@ -375,6 +375,18 @@ a:focus-visible {
   font-weight: 500;
 }
 
+.scheme-description {
+  margin: 9px 3px 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+#sheetContent .scheme-description {
+  margin: 12px 4px 0;
+  font-size: 12px;
+}
+
 .segmented-control {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -20,10 +20,12 @@
 | 主卫淋浴盘 | 83×87cm |
 | 客卫淋浴盘 | 86×85cm |
 | 南阳台低柜 | 80×35×72cm |
-| 南阳台小桌 | 90×45×75cm |
+| 南阳台休闲凳 | 宽95cm，坐垫深54cm |
 
 比例参考：[IKEA TROTTEN 办公桌](https://www.ikea.cn/cn/zh/cat/trotten-te-luo-teng-xi-lie-55989/)、[PAX衣柜框架](https://www.ikea.cn/cn/zh/p/pax-pa-ke-si-yi-gui-kuang-jia-shen-hui-se-90509126/)、[TRONES薄鞋柜](https://www.ikea.com/gb/en/p/trones-shoe-cabinet-storage-white-00397307/)。模型不代表指定购买清单。
 
 检验重点为门扇回转、家具不穿墙、不挡连续过道、床与桌椅分离，以及独立的马桶/淋浴区域。窗宽、阳台进深等未标明尺寸仍需现场复尺。
 
 外晾衣架采用窗外壁挂、分杆晾晒的定制布置，参考[Leifheit壁挂晾衣架](https://www.leifheit.com/en-en/wall-dryers/16460/wall-dryer-telegant-36-protect-plus/83201)的节省地面空间思路；本模型尺寸按当前窗宽与操作空间设计。
+
+过道方案仅调整客卫淋浴位置：A东北角，B西南角，均86×85cm。A主卧门90cm，主卫和客卫门80cm；B套间门90cm。南阳台休闲凳和低柜保持固定，不随方案切换。

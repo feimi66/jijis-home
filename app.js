@@ -26,7 +26,7 @@ const DOOR_CLEARANCE = 0.003;
 const state = {
   mode: "orbit",
   room: "all",
-  scheme: "merged",
+  scheme: readCorridorScheme(),
   contextVisible: true,
   labelsVisible: true,
   wallsVisible: true,
@@ -313,7 +313,12 @@ const mergedFurniture = new THREE.Group();
 const glassFurniture = new THREE.Group();
 const glassStructure = new THREE.Group();
 mergedScheme.add(mergedFurniture);
-glassScheme.add(glassFurniture, glassStructure);
+glassScheme.add(glassFurniture);
+// 每套方案分别合并整屋墙面；切换时连同门框、墙角与碰撞同步更新。
+const schemeStructures={merged:new THREE.Group(),glass:glassStructure};
+Object.entries(schemeStructures).forEach(([scheme,group])=>{
+  group.name="walls-"+scheme;group.userData.scheme=scheme;wallsGroup.add(group);
+});
 home.add(floorsGroup, wallsGroup, doorsGroup, furnitureGroup, labelsGroup, mergedScheme, glassScheme);
 
 function box(parent, x, y, z, width, height, depth, material, options = {}) {
@@ -352,17 +357,19 @@ function floor(room, x, z, width, depth, material) {
   return mesh;
 }
 
-function wallH(x1, x2, z, height = CEILING_HEIGHT, material = materials.wall, y = height / 2) {
-  wallRuns.push({axis:"h",x1,x2,z,y1:y-height/2,y2:y+height/2,material});
-  if (y - height / 2 < 0.25) wallSegments.push({ x1, z1: z, x2, z2: z });
-  return box(wallsGroup, (x1 + x2) / 2, y, z, x2 - x1, height, WALL_THICKNESS, material);
+function wallH(x1, x2, z, height = CEILING_HEIGHT, material = materials.wall, y = height / 2, scheme = null) {
+  wallRuns.push({axis:"h",x1,x2,z,y1:y-height/2,y2:y+height/2,material,scheme});
+  if (y - height / 2 < 0.25) wallSegments.push({ x1, z1: z, x2, z2: z, scheme });
+  return box(scheme?schemeStructures[scheme]:wallsGroup, (x1 + x2) / 2, y, z, x2 - x1, height, WALL_THICKNESS, material,{radius:0});
 }
 
-function wallV(x, z1, z2, height = CEILING_HEIGHT, material = materials.wall, y = height / 2) {
-  wallRuns.push({axis:"v",x,z1,z2,y1:y-height/2,y2:y+height/2,material});
-  if (y - height / 2 < 0.25) wallSegments.push({ x1: x, z1, x2: x, z2 });
-  return box(wallsGroup, x, y, (z1 + z2) / 2, WALL_THICKNESS, height, z2 - z1, material);
+function wallV(x, z1, z2, height = CEILING_HEIGHT, material = materials.wall, y = height / 2, scheme = null) {
+  wallRuns.push({axis:"v",x,z1,z2,y1:y-height/2,y2:y+height/2,material,scheme});
+  if (y - height / 2 < 0.25) wallSegments.push({ x1: x, z1, x2: x, z2, scheme });
+  return box(scheme?schemeStructures[scheme]:wallsGroup, x, y, (z1 + z2) / 2, WALL_THICKNESS, height, z2 - z1, material,{radius:0});
 }
+function schemeWallH(scheme,x1,x2,z){return wallH(x1,x2,z,CEILING_HEIGHT,materials.wall,CEILING_HEIGHT/2,scheme);}
+function schemeWallV(scheme,x,z1,z2){return wallV(x,z1,z2,CEILING_HEIGHT,materials.wall,CEILING_HEIGHT/2,scheme);}
 
 // 普通窗嵌入墙洞，窗台下方及窗顶上方均有完整墙体。
 function addWallWindow(x, z, width, height, sill, rotation = 0, { panoramic = false, frosted = false } = {}) {
@@ -448,7 +455,7 @@ function addDoorFrame(x,z,rotation,width,material=materials.oak,scheme=null) {
   group.rotation.y = rotation;
   recordDoorJambs(x,z,rotation,width,scheme);
   unifyBoxSurfaces(group,group.children.filter(m=>m.material===material),material,"continuous-door-frame",1);
-  wallsGroup.add(group);
+  (scheme?schemeStructures[scheme]:wallsGroup).add(group);
   return group;
 }
 
@@ -525,16 +532,18 @@ function updateDoors(delta) {
 }
 
 function wallWithDoorH(x1, x2, z, door) {
-  if(door.x-door.width/2-DOOR_FRAME_WIDTH>x1+1e-6)wallH(x1, door.x - door.width / 2 - DOOR_FRAME_WIDTH, z);
-  if(x2>door.x+door.width/2+DOOR_FRAME_WIDTH+1e-6)wallH(door.x + door.width / 2 + DOOR_FRAME_WIDTH, x2, z);
-  wallH(door.x - door.width / 2 - DOOR_FRAME_WIDTH, door.x + door.width / 2 + DOOR_FRAME_WIDTH, z, CEILING_HEIGHT - DOOR_FRAME_TOP, materials.wall, (CEILING_HEIGHT + DOOR_FRAME_TOP) / 2);
+  const wall=(a,b,height=CEILING_HEIGHT,y=height/2)=>wallH(a,b,z,height,materials.wall,y,door.scheme||null);
+  if(door.x-door.width/2-DOOR_FRAME_WIDTH>x1+1e-6)wall(x1, door.x - door.width / 2 - DOOR_FRAME_WIDTH);
+  if(x2>door.x+door.width/2+DOOR_FRAME_WIDTH+1e-6)wall(door.x + door.width / 2 + DOOR_FRAME_WIDTH, x2);
+  wall(door.x - door.width / 2 - DOOR_FRAME_WIDTH, door.x + door.width / 2 + DOOR_FRAME_WIDTH, CEILING_HEIGHT - DOOR_FRAME_TOP, (CEILING_HEIGHT + DOOR_FRAME_TOP) / 2);
   addDoor({ ...door, z });
 }
 
 function wallWithDoorV(x, z1, z2, door) {
-  if(door.z-door.width/2-DOOR_FRAME_WIDTH>z1+1e-6)wallV(x, z1, door.z - door.width / 2 - DOOR_FRAME_WIDTH);
-  if(z2>door.z+door.width/2+DOOR_FRAME_WIDTH+1e-6)wallV(x, door.z + door.width / 2 + DOOR_FRAME_WIDTH, z2);
-  wallV(x, door.z - door.width / 2 - DOOR_FRAME_WIDTH, door.z + door.width / 2 + DOOR_FRAME_WIDTH, CEILING_HEIGHT - DOOR_FRAME_TOP, materials.wall, (CEILING_HEIGHT + DOOR_FRAME_TOP) / 2);
+  const wall=(a,b,height=CEILING_HEIGHT,y=height/2)=>wallV(x,a,b,height,materials.wall,y,door.scheme||null);
+  if(door.z-door.width/2-DOOR_FRAME_WIDTH>z1+1e-6)wall(z1, door.z - door.width / 2 - DOOR_FRAME_WIDTH);
+  if(z2>door.z+door.width/2+DOOR_FRAME_WIDTH+1e-6)wall(door.z + door.width / 2 + DOOR_FRAME_WIDTH, z2);
+  wall(door.z - door.width / 2 - DOOR_FRAME_WIDTH, door.z + door.width / 2 + DOOR_FRAME_WIDTH, CEILING_HEIGHT - DOOR_FRAME_TOP, (CEILING_HEIGHT + DOOR_FRAME_TOP) / 2);
   addDoor({ ...door, x, rotation: Math.PI / 2 });
 }
 
@@ -562,7 +571,7 @@ wallH(9.2,9.8,1.8);wallH(12.2,12.8,1.8);addWindowHorizontal(11,1.8,2.4,1.4,.95);
 wallV(6.2,1.8,5.1);wallV(9.2,1.8,5.1);
 wallWithDoorH(6.2,9.2,5.1,{id:"gaming",label:"电竞房门",x:8.6,width:.9,hinge:"right",swing:-1});
 // 客房保留过道入口，原客卫北侧门封墙。
-wallWithDoorH(9.2,12.8,5.1,{id:"guest",label:"客房门",x:9.7,width:.8,hinge:"left",swing:1});
+wallWithDoorH(9.2,12.8,5.1,{id:"guest",label:"客房门",x:9.7,width:.8,hinge:"right",swing:-1});
 wallV(12.8,1.8,5.7);wallV(12.8,6.55,14.1);
 addWindowVertical(12.8,6.125,.85,.85,1.25,{frosted:true});
 // 主卧上方原窗封成连续墙体。
@@ -570,13 +579,26 @@ addWindowVertical(12.8,6.125,.85,.85,1.25,{frosted:true});
 wallV(2.6,3.5,10.3);
 wallH(2.6,2.9,10.3);wallH(6.75,8.9,10.3);
 addWindowHorizontal(4.825,10.3,3.85,2.64,.02,{panoramic:true});
-// 客卫为一整间，取消内部隔墙；入口改为主卧北侧原衣柜位置。
-wallV(10.2,5.1,7.1);
-wallWithDoorH(10.2,12.8,7.1,{id:"bath-b",label:"主卧通往客卫",x:11.55,width:.86,hinge:"left",swing:-1});
-// 图二连接区完全开放，取消围墙和套间/主卧入口门；仅保留主卫实体围墙。
+// 主卫西侧和主卧南侧边界为两方案共用，客卫始终是一整间。
 wallV(7.1,8.0,10.3);
-wallV(8.9,8.0,14.1);
-wallWithDoorH(7.1,8.9,8.0,{id:"bath-a",label:"主卫门",x:8.35,width:.8,hinge:"right",swing:1});
+wallV(8.9,10.3,14.1);
+
+// A：公共过道向南转入主卫旁，主卧与主卫直连，客卫改从过道中部进入。
+schemeWallV("merged",8.9,7.1,8.0);
+wallWithDoorH(8.9,10.2,7.1,{id:"master-a",label:"主卧门",x:9.55,width:.90,hinge:"left",swing:-1,open:false,scheme:"merged"});
+schemeWallH("merged",7.1,8.9,8.0);
+wallWithDoorV(8.9,8.0,10.3,{id:"bath-a-ensuite",label:"主卧通往主卫",z:8.65,width:.80,hinge:"right",swing:1,scheme:"merged"});
+schemeWallH("merged",10.2,12.8,7.1);
+wallWithDoorV(10.2,5.1,7.1,{id:"bath-b-corridor",label:"过道通往客卫",z:6.20,width:.80,hinge:"right",swing:1,scheme:"merged"});
+
+// B：保留原内部通行，在客厅侧用完整隔墙与套间门围合主卧入口。
+schemeWallH("glass",7.1,10.2,6.3);
+wallWithDoorV(7.1,6.3,8.0,{id:"master-b",label:"主卧套间门",z:7.00,width:.90,hinge:"right",swing:1,open:false,scheme:"glass"});
+schemeWallV("glass",8.9,8.0,10.3);
+wallWithDoorH(7.1,8.9,8.0,{id:"bath-a",label:"主卫门",x:8.35,width:.8,hinge:"right",swing:1,scheme:"glass"});
+schemeWallV("glass",10.2,5.1,7.1);
+wallWithDoorH(10.2,12.8,7.1,{id:"bath-b",label:"主卧通往客卫",x:11.55,width:.86,hinge:"left",swing:-1,scheme:"glass"});
+
 // 主卧与南侧阳台合为连续空间，取消全部中间墙、门框及推拉门。
 wallH(8.9,9.15,14.1);wallH(12.55,12.8,14.1);
 addWindowHorizontal(10.85,14.1,3.4,1.5,.88);
@@ -708,11 +730,23 @@ function buildWallCornerCaps(runs,material=materials.wall){
   return caps;
 }
 function finishStructure(){
-  wallCornerCaps.push(...buildWallCornerCaps(wallRuns));
-  wallCornerCaps.forEach(c=>box(wallsGroup,c.x,(c.y1+c.y2)/2,c.z,WALL_THICKNESS,c.y2-c.y1,WALL_THICKNESS,c.material,{radius:0}));
-  const wallMeshes=wallsGroup.children.filter(m=>m.isMesh&&m.material===materials.wall);
-  structuralWallBounds.push(...canonicalBounds(wallMeshes.map(meshBoxBounds)));
-  unifyBoxSurfaces(wallsGroup,wallMeshes,materials.wall,"continuous-walls");
+  const commonMeshes=wallsGroup.children.filter(m=>m.isMesh&&m.material===materials.wall);
+  const commonBounds=commonMeshes.map(meshBoxBounds);
+  for(const [scheme,group] of Object.entries(schemeStructures)){
+    const activeRuns=wallRuns.filter(run=>!run.scheme||run.scheme===scheme);
+    const caps=buildWallCornerCaps(activeRuns);
+    caps.forEach(c=>{
+      c.scheme=scheme;wallCornerCaps.push(c);
+      box(group,c.x,(c.y1+c.y2)/2,c.z,WALL_THICKNESS,c.y2-c.y1,WALL_THICKNESS,c.material,{radius:0});
+    });
+    commonBounds.forEach(([lo,hi])=>box(group,(lo[0]+hi[0])/2,(lo[1]+hi[1])/2,(lo[2]+hi[2])/2,
+      hi[0]-lo[0],hi[1]-lo[1],hi[2]-lo[2],materials.wall,{radius:0}));
+    const meshes=group.children.filter(m=>m.isMesh&&m.material===materials.wall);
+    canonicalBounds(meshes.map(meshBoxBounds)).forEach(bounds=>{bounds.scheme=scheme;structuralWallBounds.push(bounds);});
+    unifyBoxSurfaces(group,meshes,materials.wall,"continuous-walls-"+scheme);
+    group.visible=scheme===state.scheme;
+  }
+  commonMeshes.forEach(mesh=>{wallsGroup.remove(mesh);mesh.geometry.dispose();});
   [materials.floorStone,materials.floorWood,materials.floorBath].forEach((material,i)=>{
     const mesh=unifyBoxSurfaces(floorsGroup,floorsGroup.children.filter(m=>m.isMesh&&m.material===material),material,"continuous-floor-"+i);
     if(mesh)mesh.userData.isFloor=true;
@@ -768,14 +802,15 @@ function outline(parent,points,material=materials.fabricDark) {
 function addSkirting(){
   const height=.066,thickness=.018;
   const group=new THREE.Group();group.name="墙脚收口";wallsGroup.add(group);
-  const walls=structuralWallBounds.filter(([lo,hi])=>lo[1]<=1e-6&&hi[1]>=height);
   const clipBounds=floorAreas.map(area=>[[area.x1,0,area.z1],[area.x2,height,area.z2]]);
   for(const scheme of ["merged","glass"]){
     const variant=new THREE.Group();group.add(variant);
+    const activeBounds=structuralWallBounds.filter(bounds=>!bounds.scheme||bounds.scheme===scheme);
+    const walls=activeBounds.filter(([lo,hi])=>lo[1]<=1e-6&&hi[1]>=height);
     for(const [lo,hi] of walls)box(variant,(lo[0]+hi[0])/2,height/2,(lo[2]+hi[2])/2,
       hi[0]-lo[0]+thickness*2,height,hi[2]-lo[2]+thickness*2,materials.baseboard,{radius:0});
     const jambs=doorJambBounds.filter(bounds=>!bounds.scheme||bounds.scheme===scheme);
-    const subtractBounds=[...structuralWallBounds,...jambs]
+    const subtractBounds=[...activeBounds,...jambs]
       .filter(([lo,hi])=>lo[1]<height&&hi[1]>0)
       .map(([lo,hi])=>[[lo[0],Math.max(0,lo[1]),lo[2]],[hi[0],Math.min(height,hi[1]),hi[2]]]);
     const mesh=unifyBoxSurfaces(variant,[...variant.children],materials.baseboard,scheme==="merged"?"continuous-skirting":"continuous-skirting-glass",8,{subtractBounds,clipBounds});
@@ -1303,16 +1338,15 @@ rod(furnitureGroup,[7.17,1.2,8.65],[7.17,1.2,9.1],.012,materials.chrome);
 box(furnitureGroup,7.2,.98,8.84,.028,.4,.26,materials.linen,{radius:.014,name:"bath-towel"});
 addVanity(furnitureGroup,10.69,5.46,.66,.48);
 const guestToilet=addToilet(furnitureGroup,12.39,6.66);guestToilet.rotation.y=Math.PI/2;
-addShower(furnitureGroup,10.70,6.59,.86,.85);
-// 狭长主卧阳台仅做小尺度生活布置，两套方案不更改房屋边界。
-const balconyBench=new THREE.Group();balconyBench.name="阳台休闲凳";balconyBench.position.set(9.67,0,13.59);mergedFurniture.add(balconyBench);
+// 新过道门前保留开启和站立空间，A淋浴移至东北角；B保留现位置。
+addShower(mergedFurniture,12.20,5.62,.86,.85);
+addShower(glassFurniture,10.70,6.59,.86,.85);
+// 主卧南阳台固定休闲收纳布置，不随过道方案切换。
+const balconyBench=new THREE.Group();balconyBench.name="阳台休闲凳";balconyBench.position.set(9.67,0,13.59);furnitureGroup.add(balconyBench);
 softBox(balconyBench,0,.382,0,.95,.14,.54,materials.fabric,.055,.02,"balcony-bench-seat");
 curvedBack(balconyBench,0,.71,.22,.95,.46,.12,materials.fabricDark,.015);
 [-.37,.37].forEach(px=>[-.19,.19].forEach(pz=>rod(balconyBench,[px,.06,pz],[px,.315,pz],.023,materials.oak)));
-addCabinet(mergedFurniture,12.16,13.63,.80,.35,.72);
-addDesk(glassFurniture,9.46,13.43,.9,.45,Math.PI/2);
-addChair(glassFurniture,10.10,13.43,-Math.PI/2);
-addCabinet(glassFurniture,12.16,13.63,.80,.35,.72);
+addCabinet(furnitureGroup,12.16,13.63,.80,.35,.72);
 
 // 其余楼层仅为毛坯参照，不属于自家的可行走空间。
 function buildBuildingContext(){
@@ -1392,7 +1426,7 @@ function roundedRect(ctx, x, y, width, height, radius) {
   ctx.closePath();
 }
 
-function addLabel(room, title, subtitle, x, z) {
+function addLabel(room, title, subtitle, x, z, scheme = null) {
   const labelCanvas = document.createElement("canvas");
   labelCanvas.width = 512;
   labelCanvas.height = 170;
@@ -1419,6 +1453,7 @@ function addLabel(room, title, subtitle, x, z) {
   sprite.scale.set(1.8, 0.6, 1);
   sprite.renderOrder = 20;
   sprite.userData.room = room;
+  sprite.userData.scheme = scheme;
   labelsGroup.add(sprite);
 }
 
@@ -1429,9 +1464,12 @@ addLabel("balcony-a","生活阳台","洗衣 · 外侧晾晒",4.85,.85);
 addLabel("gaming","电竞房","3.0m × 3.3m轴线",7.7,3.9);
 addLabel("guest","客房","3.6m × 3.3m轴线",11.4,3.8);
 addLabel("hall","开放过道","客餐厅直接进入",6.5,5.7);
-addLabel("suite","开放连接区","客厅连通主卧与主卫",8.2,7.0);
-addLabel("bath-a","主卫","独立淋浴区",8,9.3);
-addLabel("bath-b","客卫","整间卫浴 · 由主卧进入",11.55,6.2);
+addLabel("suite","独立过道","公共通道 · 主卧有门",8.2,7.0,"merged");
+addLabel("suite","主卧入口","完整隔墙 · 套间门",8.2,7.0,"glass");
+addLabel("bath-a","主卫","由主卧直接进入",8,9.3,"merged");
+addLabel("bath-a","主卫","由套间内部进入",8,9.3,"glass");
+addLabel("bath-b","客卫","整间卫浴 · 从过道进入",11.55,6.2,"merged");
+addLabel("bath-b","客卫","整间卫浴 · 从主卧进入",11.55,6.2,"glass");
 addLabel("master","主卧","3.9m开间 · 南侧延伸",10.9,10.4);
 addLabel("balcony-b","主卧阳台","与主卧连成一体",10.85,13.55);
 
@@ -1465,7 +1503,7 @@ const roomViews={
   kitchen:{label:"厨房",target:[1.8,.7,.9],offset:[4.5,7,5],walk:[2.15,1.62,1.15],yaw:Math.PI/2},
   "balcony-a":{label:"生活阳台",target:[4.85,1.0,.15],offset:[2.95,3.8,-4.25],walk:[4.9,1.62,1.3],yaw:0},
   "bath-a":{label:"主卫",target:[8,.6,9.1],offset:[-4.6,7.5,5.5],walk:[8.25,1.62,8.75],yaw:Math.PI},
-  "bath-b":{label:"客卫",target:[11.55,.6,6.1],offset:[-4.6,7.5,5.5],walk:[11.75,1.62,5.85],yaw:0},
+  "bath-b":{label:"客卫",target:[11.55,.6,6.1],offset:[-4.6,7.5,5.5],walk:[11.40,1.62,6.10],yaw:0},
   "balcony-b":{label:"主卧阳台",target:[10.85,.6,13.3],offset:[-4.5,8,6],walk:[10.85,1.62,13.05],yaw:Math.PI},
 };
 
@@ -1574,20 +1612,47 @@ function setMode(mode) {
   }
 }
 
-function setScheme(scheme){
+function readCorridorScheme(){
+  try{const value=localStorage.getItem("jiji-corridor-scheme");return value==="merged"||value==="glass"?value:"glass";}
+  catch(_){return "glass";}
+}
+function schemeDescription(scheme){
+  return scheme==="merged"?"主卧直连主卫；客卫从过道中部进入，主卧设独立房门。":"保留现有卫浴连接，外侧加隔墙和套间门，关门后主卧独立。";
+}
+function setScheme(scheme,announce=true){
   if(scheme!=="merged"&&scheme!=="glass")return;
   state.scheme=scheme;
+  try{localStorage.setItem("jiji-corridor-scheme",scheme);}catch(_){/* 当前页仍可切换 */}
+  Object.entries(schemeStructures).forEach(([key,group])=>group.visible=key===scheme);
   skirtingVariants.forEach(group=>group.visible=group.userData.scheme===scheme);
   mergedScheme.visible=scheme==="merged";glassScheme.visible=scheme==="glass";
-  $("#schemeCaption").textContent=scheme==="merged"?"休闲与收纳":"小工作台与收纳";
-  $$(".scheme-button").forEach(button=>button.classList.toggle("is-active",button.dataset.scheme===scheme));
-  updateDoorButtons();showToast(scheme==="merged"?"主卧阳台：休闲布置":"主卧阳台：生活工作台");
+  doors.forEach(door=>{const active=!door.scheme||door.scheme===scheme;door.group.visible=active;door.frame.visible=active;});
+  labelsGroup.children.forEach(label=>label.visible=!label.userData.scheme||label.userData.scheme===scheme);
+  $("#schemeCaption").textContent=scheme==="merged"?"独立过道":"封闭入口";
+  $("#schemeDescription").textContent=schemeDescription(scheme);
+  $$(".scheme-button").forEach(button=>{const active=button.dataset.scheme===scheme;button.classList.toggle("is-active",active);button.setAttribute("aria-pressed",String(active));});
+  roomViews.suite.label=scheme==="merged"?"独立过道与主卧门":"主卧套间入口";
+  for(const [room,text] of [["suite",scheme==="merged"?"公共通道":"隔墙与套间门"],["bath-a",scheme==="merged"?"主卧直达":"套间进入"],["bath-b",scheme==="merged"?"过道进入":"主卧进入"]]){
+    $$('[data-room="'+room+'"] small').forEach(node=>node.textContent=text);
+  }
+  populateDoors();
+  const sheet=$("#mobileSheet");
+  if(sheet.classList.contains("is-open")&&$("#sheetTitle").textContent==="门的开关")renderMobileDoors();
+  if(state.mode==="walk"){
+    // 切换后只在原位置落入新增墙或门时回到公共过道，保留视角和速度。
+    if(!canStand(camera.position.x+PLAN_CENTER.x,camera.position.z+PLAN_CENTER.z)){
+      state.cameraTween=null;camera.position.copy(worldPoint(8.4,1.62,5.9));
+      state.room="hall";updateRoomButtons("hall");
+    }
+    updateDoorAction();
+  }
+  if(state.room==="suite")viewStatus.textContent=roomViews.suite.label;
+  if(announce)showToast(scheme==="merged"?"A · 独立过道：主卫连接主卧，客卫从过道进入":"B · 封闭入口：保留内部连接，主卧增加套间门");
 }
 
 function updateDisplayOptions() {
   wallsGroup.visible = state.wallsVisible;
   doorsGroup.visible = state.wallsVisible;
-  glassStructure.visible = state.wallsVisible;
   furnitureGroup.visible = state.furnitureVisible;
   mergedFurniture.visible = state.furnitureVisible;
   glassFurniture.visible = state.furnitureVisible;
@@ -1821,8 +1886,8 @@ function doorSegments(door) {
 
 function canStand(x, z) {
   if (!floorAreas.some(area => x >= area.x1 - 1e-6 && x <= area.x2 + 1e-6 && z >= area.z1 - 1e-6 && z <= area.z2 + 1e-6)) return false;
-  if (wallSegments.some(segment => segmentDistance(x, z, segment) < WALK_RADIUS + WALL_THICKNESS / 2)) return false;
-  if(wallCornerCaps.some(c=>c.y1<.25&&Math.hypot(
+  if (wallSegments.some(segment => (!segment.scheme||segment.scheme===state.scheme)&&segmentDistance(x, z, segment) < WALK_RADIUS + WALL_THICKNESS / 2)) return false;
+  if(wallCornerCaps.some(c=>(!c.scheme||c.scheme===state.scheme)&&c.y1<.25&&Math.hypot(
     Math.max(c.bounds[0][0]-x,0,x-c.bounds[1][0]),
     Math.max(c.bounds[0][2]-z,0,z-c.bounds[1][2]))<WALK_RADIUS))return false;
   return !doors.some(door => doorSegments(door).some(segment => segmentDistance(x, z, segment) < WALK_RADIUS + 0.025));
@@ -1872,7 +1937,7 @@ function showPlan() {
 }
 
 function populateDoors() {
-  $('#doorList').innerHTML = doors.map(door => '<button class="door-button" type="button" data-door="' + door.id + '"><span>' + door.label + '</span><small></small></button>').join('');
+  $('#doorList').innerHTML = doors.filter(door=>!door.scheme||door.scheme===state.scheme).map(door => '<button class="door-button" type="button" data-door="' + door.id + '"><span>' + door.label + '</span><small></small></button>').join('');
   bindDoorButtons($('#doorList'));
   updateDoorButtons();
 }
@@ -1912,8 +1977,8 @@ function bindUI() {
   $("#contextQuickToggle").addEventListener("click",()=>setContextVisible(!state.contextVisible));
   try{setContextVisible(localStorage.getItem("jiji-context-visible")!=="false");}catch(_){setContextVisible(true);}
   $("#interactDoor").addEventListener("click", () => { const door = nearestDoor(); if (door) toggleDoor(door.id); });
-  $("#openAllDoors").addEventListener("click", () => { doors.forEach(door => { door.open = true; }); updateDoorButtons(); showToast("所有门已打开"); });
-  $("#closeAllDoors").addEventListener("click", () => { doors.forEach(door => { door.open = false; }); updateDoorButtons(); showToast("所有门已关闭"); });
+  $("#openAllDoors").addEventListener("click", () => { doors.filter(door=>!door.scheme||door.scheme===state.scheme).forEach(door => { door.open = true; }); updateDoorButtons(); showToast("所有门已打开"); });
+  $("#closeAllDoors").addEventListener("click", () => { doors.filter(door=>!door.scheme||door.scheme===state.scheme).forEach(door => { door.open = false; }); updateDoorButtons(); showToast("所有门已关闭"); });
   $$(".room-button").forEach((button) => {
     button.addEventListener("click", () => {
       selectRoom(button.dataset.room);
@@ -1969,7 +2034,7 @@ function bindUI() {
 async function sharePage() {
   const shareData = {
     title: "吉吉的家 · 3D看房",
-    text: "欢迎参观吉吉的家：约130㎡现代原木风3D设计方案",
+    text: "欢迎参观吉吉的家：C1户型现代原木风3D设计方案",
     url: window.location.href,
   };
 
@@ -2009,6 +2074,11 @@ function handleMobileAction(action) {
   if (action === "scheme") openMobileSheet("scheme");
 }
 
+function renderMobileDoors(){
+  const content=$("#sheetContent");
+  content.innerHTML='<div class="door-list">'+$("#doorList").innerHTML+'</div><h3 class="drawer-heading">电视柜抽屉</h3><div class="drawer-list">'+$("#drawerList").innerHTML+'</div>';
+  bindDrawerButtons(content);updateDrawerButtons();bindDoorButtons(content);updateDoorButtons();
+}
 function openMobileSheet(type) {
   const sheet = $("#mobileSheet");
   const content = $("#sheetContent");
@@ -2026,27 +2096,24 @@ function openMobileSheet(type) {
   } else if (type === 'doors') {
     $('#sheetTitle').textContent = '门的开关';
     $('#sheetSubtitle').textContent = '也可直接点击3D门扇；漫游靠近门后可开关';
-    content.innerHTML = '<div class="door-list">' + $('#doorList').innerHTML + '</div><h3 class="drawer-heading">电视柜抽屉</h3><div class="drawer-list">'+$('#drawerList').innerHTML+'</div>'; 
-    bindDrawerButtons(content);
-    updateDrawerButtons();
-    bindDoorButtons(content);
-    updateDoorButtons();
+    renderMobileDoors();
   } else {
-    $("#sheetTitle").textContent = "范围与阳台布置";
-    $("#sheetSubtitle").textContent = "右侧C1为我家，周边只显示毛坯";
+    $("#sheetTitle").textContent = "范围与过道方案";
+    $("#sheetSubtitle").textContent = "两种方案均设主卧门；右侧C1为我家";
     content.innerHTML = `
       <div class="scope-actions"><button id="sheetHome" type="button">查看我家</button><button id="sheetBuilding" type="button">整层轮廓</button><button id="sheetContext" type="button">${state.contextVisible?"关闭":"显示"}周边毛坯</button></div>
-      <div class="segmented-control" role="group" aria-label="切换主卧阳台方案">
-        <button class="scheme-button ${state.scheme === "merged" ? "is-active" : ""}" type="button" data-scheme="merged">A · 休闲收纳</button>
-        <button class="scheme-button ${state.scheme === "glass" ? "is-active" : ""}" type="button" data-scheme="glass">B · 小工作台</button>
-      </div>`;
+      <div class="segmented-control" role="group" aria-label="切换过道与主卧方案">
+        <button class="scheme-button ${state.scheme === "merged" ? "is-active" : ""}" type="button" data-scheme="merged" aria-pressed="${state.scheme === "merged"}">A · 独立过道</button>
+        <button class="scheme-button ${state.scheme === "glass" ? "is-active" : ""}" type="button" data-scheme="glass" aria-pressed="${state.scheme === "glass"}">B · 封闭入口</button>
+      </div>
+      <p class="scheme-description">${schemeDescription(state.scheme)}</p>`;
     $("#sheetHome").addEventListener("click",()=>{selectRoom("all");closeMobileSheet();});
     $("#sheetBuilding").addEventListener("click",()=>{showBuilding();closeMobileSheet();});
     $("#sheetContext").addEventListener("click",()=>{setContextVisible(!state.contextVisible);closeMobileSheet();});
     $$(".scheme-button", content).forEach((button) => {
       button.addEventListener("click", () => {
         setScheme(button.dataset.scheme);
-        selectRoom("master");
+        selectRoom("hall");
         closeMobileSheet();
       });
     });
@@ -2158,7 +2225,7 @@ async function loadOptionalGLB() {
 }
 
 bindUI();
-setScheme("merged");
+setScheme(state.scheme,false);
 updateDisplayOptions();
 resize();
 tweenToView("all", true);
